@@ -2,21 +2,24 @@
 Updated: 2026-07-24
 
 ## Phase
-Phase 1 — intake done; waiting on first page data to start the analysis.
+Phase 1 — first analysis DONE (see analysis-2026-07.md). Key finding: the page is
+dormant (0 posts/30d, ~1% reach), so Phase 1 is reframed as **reactivation before
+growth**. Waiting on niche/positioning to finalize the content plan.
 
 ## Done
-- Intake: personal brand, Business/Creator account, 10k+ followers, goals =
-  engagement + follower growth, phased scope agreed
-- Data-access routes decided: manual export first, official API as follow-up;
-  unofficial scrapers ruled out
+- Intake (personal brand, Business/Creator, 16k followers, goals = engagement + followers)
+- Tool evaluation: Instagram MCPs vetted; Phase 1 = direct Graph API with minimal
+  scopes; two self-hosted MCPs deferred to Phase 3 (see toolbox/REGISTRY.md)
+- Analyzed owner's Insights screenshots → analysis-2026-07.md with diagnosis,
+  audience profile (Iranian men 25–54, active 9–11 PM, Sat/Sun/Mon), 4-week
+  reactivation plan skeleton, KPI baselines & targets
 
 ## Next
-1. Owner provides: page handle/niche + Insights data (screenshots or export:
-   last 30–90 days — reach, engagement, follower growth, top posts, audience
-   demographics, active hours)
-2. Run Phase 1 analysis → produce growth plan with KPIs in this folder
-3. In parallel (if owner approves): walk owner through official Meta Graph API
-   connection for ongoing data access (vet-tools + approval required before setup)
+1. Owner answers: page niche/positioning + Content-tab top posts + meaning of
+   "short term" → finalize concrete content plan (topics, formats, weekly calendar)
+2. Optional in parallel: Meta Graph API token setup (owner approval + guided steps)
+   for ongoing data instead of screenshots
+3. After 1: deliver week-by-week content calendar and start Phase 2 support
 
 ## Blockers / waiting on
-- Page data from the owner (nothing can be analyzed before this)
+- Niche/positioning of the personal brand (single blocker for the content plan)
