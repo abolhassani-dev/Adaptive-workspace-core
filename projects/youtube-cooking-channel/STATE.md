@@ -1,26 +1,31 @@
 # State — YouTube Cooking Channel (English)
-Updated: 2026-07-24
+Updated: 2026-07-24 (second session update)
 
 ## Phase
-Intake + initial research done; awaiting owner's answers to open questions before
-locking the niche and the 90-day content calendar.
+Intake complete, niche strategy and 90-day content calendar delivered. Ready for
+production: owner picks channel name and starts filming the Shorts bank.
 
 ## Done
-- Researched 2026 YouTube algorithm (predicted-satisfaction ranking, small-audience
-  testing, new-creator push) — see `plan-2026-07.md`
-- Researched 2026 YPP monetization tiers and eligibility rules
-- Confirmed critical constraint: paid-ad watch time does NOT count toward the
-  4,000-hour YPP threshold (ads accelerate subscribers/discovery only)
-- Researched cooking-niche RPM/CPM and Google Ads costs; built three budget scenarios
-- Wrote full launch plan: `plan-2026-07.md` (algorithm, 90-day sandbox-exit plan,
-  monetization path, ad campaign design, cost estimate, KPIs)
-- Created project charter with open intake questions
+- Research: 2026 algorithm, YPP tiers, ad costs, cooking-niche RPM (`plan-2026-07.md`)
+- Intake answered: budget $400/mo approved; format = silent cooking with English text
+  overlay + ambient sound; equipment = camera + mobile; residence Iran/Turkey
+- Niche resolved: umbrella "Modern Persian Home Kitchen" + 4 test pillars
+  (classics / healthy / desserts / breakfast), winners chosen by week-8 analytics
+- Flagged hard constraint: monetization + ads must run entirely through Turkey
+  (Iran excluded from YPP/AdSense/Google Ads); ~20% Turkish VAT on ad spend noted
+- Delivered `content-calendar.md`: 3 channel-name candidates, weekly rhythm,
+  first 10 Shorts + first 4 long-form videos with hooks/thumbnails, ad-phase plan,
+  silent-format production notes
 
 ## Next
-- Get owner's answers: sub-niche, monthly ad budget, production capacity, voice format,
-  country of residence
-- Then: lock niche → build the 90-day content calendar (first 10 Shorts + first 4
-  long-form topics with titles/thumbnails concepts)
+- Owner: pick channel name (3 candidates in content-calendar.md)
+- Owner: create channel (Google account country = Turkey), set banner/About/trailer
+  per calendar notes
+- Owner: batch-film the 10-Short bank + first 2 long-form videos
+- Claude (next session): review first analytics after ~2 weeks of publishing;
+  draft exact titles/descriptions/tags per video on request
 
 ## Blockers / waiting on
-- Owner input on the five open questions in PROJECT.md
+- Channel name choice
+- Confirmation (by ~month 4) that Turkish banking/identity is available for AdSense
+  payout — not blocking filming/publishing now

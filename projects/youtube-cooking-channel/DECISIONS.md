@@ -21,3 +21,24 @@ kept as fallback if owner's budget is tighter. Awaiting owner confirmation.
 The plan was initially committed as a standalone root file on an orphan branch,
 outside workspace conventions. Rebuilt the branch on the workspace base and moved the
 work into `projects/youtube-cooking-channel/` per the `new-project` protocol.
+
+## 2026-07-24 — Intake answers locked; niche resolved by pillar testing
+Owner has no single concept (wants Persian food, healthy, desserts, breakfast).
+Decision: do NOT force one sub-niche up front. Umbrella concept = "modern Persian home
+kitchen" with four content pillars (Persian classics / healthy & light / desserts &
+cakes / breakfast), rotated for 8 weeks; per-pillar CTR + retention decides which 1–2
+pillars become the channel's core. Ruled OUT: fully mixed channel with no umbrella
+identity — the 2026 algorithm rewards a clear, consistent topic.
+
+## 2026-07-24 — Format locked: no voice, English text overlay, ambient sound
+Fits owner's language comfort and equipment, removes accent/fluency risk, and matches
+a proven "silent cooking / ASMR kitchen" genre. Trade-off accepted: slightly weaker
+viewer bonding vs. voiceover; mitigated with strong on-screen writing and sound design.
+
+## 2026-07-24 — Budget locked: $400/month for 3 months (starting ~week 9)
+Owner approved. Effective media spend depends on Turkish VAT decision (see PROJECT.md).
+
+## 2026-07-24 — Monetization must route through Turkey, not Iran
+Iran is excluded from YPP/AdSense/Google Ads under sanctions. All account, billing,
+tax, and payout setup will use Turkey (YPP-eligible). Ruled OUT: any workaround using
+misrepresented country info on an Iranian-based setup — high ban risk, violates terms.

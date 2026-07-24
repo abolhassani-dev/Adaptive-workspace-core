@@ -35,10 +35,25 @@ project.
 ## Toolbox (this project)
 (empty — no tool has passed vetting or been needed)
 
+## Intake answers (2026-07-24)
+- Content interests: Persian food, healthy/diet, cakes & desserts, breakfast — no single
+  concept preferred. Resolved via pillar-testing strategy (see DECISIONS).
+- Ad budget: $400/month approved.
+- Equipment: camera + mobile. No presenter on camera.
+- Format: **no voiceover — English text overlay + ambient/natural cooking sounds**
+  ("quiet kitchen" style; a proven genre and well-suited to Shorts).
+- Residence: Iran / Turkey.
+
+## Hard constraint — country eligibility
+Iran is not covered by the YouTube Partner Program, AdSense, or Google Ads (sanctions).
+**The entire monetization + ads path must run through Turkey**: Google account country,
+AdSense account, tax info, payout bank account, and Google Ads billing all set to
+Turkey. Turkey is fully YPP-eligible. Note: Google Ads billed in Turkey adds ~20% VAT
+(KDV) — a $400 media budget costs ~$480 with tax, or cap spend at ~$333 to stay at
+$400 all-in. Owner must confirm they can operate Turkish banking/identity before the
+YPP application (~month 4–5); not needed for filming/publishing, which can start now.
+
 ## Open questions
-- Which sub-niche? Recommended: Persian/Middle-Eastern food for Western audiences with a
-  healthy/meal-prep angle (low competition, $5–10 RPM) — awaiting owner confirmation.
-- Monthly ad budget the owner is comfortable with (recommended scenario: $300–400/mo for 3 months).
-- Owner's production capacity: hours/week, filming equipment, on-camera vs. hands-only format.
-- Presenter language comfort: native-level English voiceover, accented English, or text-overlay/no-voice format.
-- Country of residence for AdSense/YPP eligibility and payout.
+- Channel name (3 candidates proposed in content-calendar.md — owner to pick).
+- Can the owner receive payouts via a Turkish bank account? (Needed by YPP application
+  time, not before.)
