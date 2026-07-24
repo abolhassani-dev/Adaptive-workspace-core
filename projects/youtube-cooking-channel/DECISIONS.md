@@ -42,3 +42,14 @@ Owner approved. Effective media spend depends on Turkish VAT decision (see PROJE
 Iran is excluded from YPP/AdSense/Google Ads under sanctions. All account, billing,
 tax, and payout setup will use Turkey (YPP-eligible). Ruled OUT: any workaround using
 misrepresented country info on an Iranian-based setup — high ban risk, violates terms.
+
+## 2026-07-24 — VPS-only workaround assessed and ruled out as a substitute
+Owner proposed running everything through a VPS to solve the Iran restriction.
+Assessment: a Turkish VPS is fine (even helpful) as a stable connectivity layer ON TOP
+of a genuine Turkish setup, but cannot substitute for it — Google's binding signals
+are payment method, billing address, AdSense identity/address verification, tax info,
+and payout bank account, not IP. Failure point would be AdSense verification right
+after monetization, risking loss of the channel's accumulated revenue. Decision:
+start production now (needs nothing); resolve a real Turkish footing (short-stay
+residency + bank, or a fully trusted Turkey-resident partner holding AdSense) by
+month 3–4, before the ad phase and YPP application.
