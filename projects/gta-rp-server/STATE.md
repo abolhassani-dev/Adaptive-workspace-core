@@ -2,8 +2,8 @@
 Updated: 2026-07-25
 
 ## Phase
-Stack + hosting strategy decided; waiting on VPS location choice (Turkey vs Germany)
-to start Phase 1 (VPS server setup).
+Phase 0 (Foundation) — see ROADMAP.md for the full phased plan with checkboxes.
+Waiting on VPS location choice (Turkey vs Germany) to close Phase 0.
 
 ## Done
 - Intake: RP style, Iranian public audience, local PC hosting first, Discord community exists
