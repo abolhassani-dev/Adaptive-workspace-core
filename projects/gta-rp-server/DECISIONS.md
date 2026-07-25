@@ -90,3 +90,13 @@ Confirmed real (2026 escalation tightened it). Mitigations, in order:
 ACTION before buying: ask the host support two questions — (a) direct GitHub/DockerHub
 access or internal mirror? (b) any sanction issues running a VMP/FiveM server? Pick a
 host that answers yes/handled. Prefer gaming-focused hosts (their whole market is this).
+
+## 2026-07-25 — Correction: filtering vs sanctions distinction (risk downgraded)
+Owner correctly noted GitHub/Docker are NOT filtered by Iran. Two different
+mechanisms: (a) Iranian government filtering — does NOT apply to GitHub/DockerHub;
+(b) OFAC sanctions returning 403 from the service's own side — this is the only
+relevant one, and in practice it's mild: GitHub public repos + git clone usually
+work from Iran; DockerHub has been the main occasional offender, and mirrors handle
+it. Net: the download risk from the prior entry is real but SMALL and often absent.
+Keep the single pre-purchase question to the host as the cheap confirmation; drop
+any heavier mitigation planning unless Phase 1 actually hits a 403.
