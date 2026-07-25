@@ -64,3 +64,16 @@ boom came 4+ years post-launch); Iranian players' hardware and sanctions make
 migration even slower; and VMP gives GTA V free. Realistic runway for Persian
 GTA V RP: 3-5+ years. The community/brand we build is transferable to whatever
 platform succeeds it.
+
+## 2026-07-25 — Hosting reversal: Iranian VPS (single server until launch)
+The earlier "Iran hosting impossible" ruling applied to FiveM's Cfx.re blocks —
+VMP runs its own independent infrastructure, so it doesn't apply. Field data
+confirms: friend (Ehsan) reports 14-20ms ping on Sunset RP (gaming ISP; others
+50-60ms) — only possible if Sunset hosts inside Iran. Decision: rent ONE Iranian
+game VPS (Tehran Gaming / ParsVDS / similar, anti-DDoS, toman pricing) and use
+it as the dev server. Owner's dev-abroad + prod-Iran two-server idea: good
+instinct, adopted but re-shaped — dev/prod split activates at public launch
+(current server becomes staging, stronger one rented for prod); both in Iran.
+Foreign VPS dropped entirely. Watch item: Iranian DCs sometimes struggle
+downloading from GitHub/foreign sources (two-way sanctions) — known workarounds
+exist; revisit only if it bites in Phase 1.
