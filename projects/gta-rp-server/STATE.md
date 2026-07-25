@@ -15,6 +15,8 @@ Intake + stack research done; ready to start Phase 1 (local server setup).
 - Then: verify owner+tester can join, admin menu works end-to-end
 - Then: Persian localization pass + core RP config (jobs, economy, police)
 
+- Ask owner to collect friends' feedback on Sunset RP (what they love/hate) → Phase 2 design input
+
 ## Blockers / waiting on
 - Owner's PC specs unknown (need ~8GB+ free RAM ideally)
 - Confirm owner/tester own legit GTA V PC copies (FiveM requirement)

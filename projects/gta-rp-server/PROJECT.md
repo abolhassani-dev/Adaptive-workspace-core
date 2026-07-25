@@ -62,6 +62,12 @@ reports; Claude iterates. Claude cannot run the game server itself.
 - txAdmin — admin panel — bundled with FXServer, no extra install — official
 - Qbox framework — RP gamemode base — open source (Qbox-project on GitHub) — actively maintained
 
+## Benchmark
+Sunset RP (sunsetrp.ir) — one of the biggest Persian FiveM RP servers; the owner's
+friends currently play there. Use as the reference bar for features/quality, and
+gather friends' likes/complaints about it as design input for Phase 2. Friends are
+also candidate first players.
+
 ## Open questions
 - Server name / brand identity?
 - Whitelist (Discord-gated) or open access at launch?
