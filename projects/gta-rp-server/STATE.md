@@ -14,10 +14,11 @@ Waiting on VPS location choice (Turkey vs Germany) to close Phase 0.
 - Owner: ask friends their in-game ping on Sunset RP (sets the acceptance bar)
   and what they love/hate about Sunset (Phase 2 design input)
 - Owner: rent VPS (Turkey or Germany, ~8GB RAM, ~$10-20/mo, via toman reseller)
+- Claude: study VMP Academy docs for server setup specifics before writing the guide
 - Phase 1: write the VPS setup guide (Persian) — Linux + FXServer + txAdmin +
   Qbox recipe + MariaDB; verify owner+tester can join, admin panel works end-to-end
 - Then: Persian localization pass + core RP config (jobs, economy, police)
 
 ## Blockers / waiting on
 - VPS location decision (Turkey vs Germany) — pending friends' Sunset ping check
-- Confirm owner/tester own legit GTA V PC copies (FiveM requirement)
+- (resolved: VMP launcher provides GTA V — no original-copy requirement)

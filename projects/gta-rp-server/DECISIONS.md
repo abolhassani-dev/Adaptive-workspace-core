@@ -43,3 +43,24 @@ infrastructure/price, proven by existing Persian servers). RP tolerates
 80-150ms. Pending: friends' ping on Sunset RP as the acceptance bar; buy via
 Iranian toman-based resellers due to payment sanctions. ~8GB RAM VPS,
 ~$10-20/month to start.
+
+## 2026-07-25 — Platform pivot: VMP (vmp.ir) instead of vanilla FiveM
+Owner reported the Iranian scene has migrated from FiveM to VMP — research
+confirmed: VMP is an Iranian FiveM-compatible platform (open source at
+github.com/v-mp/vmp, described as "FXServer-like", ~12k commits). Sunset RP
+itself runs on VMP. Why the scene moved: Cfx.re blocks Iranian IPs, and VMP
+distributes GTA V free via its launcher (no original-copy requirement — key in
+Iran where buying is blocked by sanctions). Impact on our stack: minimal — the
+server side mirrors FXServer, so txAdmin + Qbox/QBCore-style frameworks and the
+FiveM script ecosystem carry over. Phase 1 will follow VMP's own docs (VMP
+Academy at forum.vmp.ir) for server files + their launcher/master-list specifics.
+Vanilla FiveM dropped because our audience literally cannot be there.
+
+## 2026-07-25 — GTA 6 timing: project is worth doing now
+Owner asked whether GTA 6 (consoles 2026-11-19) undermines the project. Verdict:
+no. PC version expected ~late 2027 (Rockstar pattern: GTA V console→PC took 19
+months); a moddable multiplayer scene takes further years after that (GTA V RP
+boom came 4+ years post-launch); Iranian players' hardware and sanctions make
+migration even slower; and VMP gives GTA V free. Realistic runway for Persian
+GTA V RP: 3-5+ years. The community/brand we build is transferable to whatever
+platform succeeds it.

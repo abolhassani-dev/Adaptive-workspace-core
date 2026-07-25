@@ -17,8 +17,10 @@ Mostly assembling and customizing proven open-source components, not writing a
 server from scratch.
 
 ## Chosen stack (from 2026-07-25 research — see DECISIONS.md)
-- **Platform:** FiveM (Cfx.re FXServer) — the dominant GTA V multiplayer platform,
-  owned by Rockstar since 2023; active Iranian server scene exists.
+- **Platform:** VMP (vmp.ir) — Iranian FiveM-compatible platform ("FXServer-like",
+  open source). The Iranian scene (incl. Sunset RP) lives here because Cfx.re
+  blocks Iranian IPs and VMP's launcher provides GTA V free. Server-side stack
+  mirrors FiveM, so the choices below carry over.
 - **Framework:** Qbox (qbx_core + ox_lib + ox_inventory + oxmysql) — actively
   maintained QBCore successor, modern Lua 5.4, backwards compatible with the huge
   QBCore script ecosystem.
@@ -71,6 +73,5 @@ also candidate first players.
 ## Open questions
 - Server name / brand identity?
 - Whitelist (Discord-gated) or open access at launch?
-- Owner's PC specs (RAM/CPU) — enough for FXServer + MariaDB + GTA V client together?
-- Do owner and tester have legit GTA V (Legacy) PC copies? (required by FiveM)
-- Any connectivity issues from Iran to Cfx.re services (login/keymaster)? Verify at setup.
+- VMP specifics to verify in Phase 1: exact server files/licensing, how their
+  master list works, whether txAdmin ships as-is or VMP has its own panel variant.

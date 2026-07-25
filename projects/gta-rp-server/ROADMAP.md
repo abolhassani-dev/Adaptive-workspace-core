@@ -10,21 +10,23 @@ phase while its gate is unmet.
 Gate to Phase 1: VPS location chosen and server rented.
 
 - [x] Intake: RP server, Iranian audience, owner + tester + Discord community
-- [x] Research & pick stack: FiveM + Qbox + txAdmin + MariaDB
+- [x] Research & pick stack: VMP platform + Qbox-style framework + txAdmin + MariaDB
 - [x] Rule out Iran hosting (Cfx.re blocks Iranian IPs); foreign VPS from day one
-- [x] Identify benchmark: Sunset RP
+- [x] Identify benchmark: Sunset RP (runs on VMP)
+- [x] Platform pivot to VMP confirmed (Iranian scene lives there; GTA V free via launcher)
+- [x] GTA 6 timing assessed: 3-5+ year runway for GTA V RP in Iran — project worth doing
 - [ ] Friends' ping check on Sunset RP → choose VPS location (Turkey vs Germany)
 - [ ] Friends' likes/complaints about Sunset RP → Phase 2 design input
 - [ ] Rent VPS (~8GB RAM, ~$10–20/mo, toman reseller)
-- [ ] Confirm owner + tester have legit GTA V PC copies
 
 ## Phase 1 — Engine on: bare server + admin panel
 Gate to Phase 2: owner & tester join the server; admin panel fully working.
 
+- [ ] Study VMP server docs (VMP Academy) — server files, master list, panel specifics
 - [ ] Persian step-by-step VPS setup guide (written by Claude, followed by owner)
-- [ ] FXServer + txAdmin installed and reachable in browser
-- [ ] Qbox framework deployed via txAdmin recipe; MariaDB running
-- [ ] Server keys/licensing sorted (Cfx.re keymaster)
+- [ ] VMP server + admin panel installed and reachable in browser
+- [ ] RP framework deployed; MariaDB running
+- [ ] Server registration/keys per VMP's system
 - [ ] Owner + tester connect and play on the bare city
 - [ ] Admin roles set up: owner = full control, tester = moderator
 - [ ] Automated: scheduled restarts + database backups
