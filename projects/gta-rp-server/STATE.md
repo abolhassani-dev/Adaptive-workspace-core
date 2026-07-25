@@ -2,7 +2,8 @@
 Updated: 2026-07-25
 
 ## Phase
-Intake + stack research done; ready to start Phase 1 (local server setup).
+Stack + hosting strategy decided; waiting on VPS location choice (Turkey vs Germany)
+to start Phase 1 (VPS server setup).
 
 ## Done
 - Intake: RP style, Iranian public audience, local PC hosting first, Discord community exists
@@ -10,13 +11,13 @@ Intake + stack research done; ready to start Phase 1 (local server setup).
 - Charter and decisions recorded
 
 ## Next
-- Phase 1: write the local setup guide (Persian) — FXServer + txAdmin on Windows,
-  Qbox deployment via txAdmin recipe, MariaDB setup; owner follows it on their PC
-- Then: verify owner+tester can join, admin menu works end-to-end
+- Owner: ask friends their in-game ping on Sunset RP (sets the acceptance bar)
+  and what they love/hate about Sunset (Phase 2 design input)
+- Owner: rent VPS (Turkey or Germany, ~8GB RAM, ~$10-20/mo, via toman reseller)
+- Phase 1: write the VPS setup guide (Persian) — Linux + FXServer + txAdmin +
+  Qbox recipe + MariaDB; verify owner+tester can join, admin panel works end-to-end
 - Then: Persian localization pass + core RP config (jobs, economy, police)
 
-- Ask owner to collect friends' feedback on Sunset RP (what they love/hate) → Phase 2 design input
-
 ## Blockers / waiting on
-- Owner's PC specs unknown (need ~8GB+ free RAM ideally)
+- VPS location decision (Turkey vs Germany) — pending friends' Sunset ping check
 - Confirm owner/tester own legit GTA V PC copies (FiveM requirement)

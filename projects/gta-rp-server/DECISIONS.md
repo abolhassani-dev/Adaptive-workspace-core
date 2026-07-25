@@ -31,3 +31,15 @@ detection, warn thresholds with auto-ban. Building a custom web panel from
 scratch was rejected: months of work to reimplement what ships free and official
 with FXServer. A custom panel can be revisited later only for needs txAdmin
 provably cannot cover.
+
+## 2026-07-25 — Hosting: foreign VPS from day one (Iran hosting ruled out)
+Owner proposed renting a server immediately instead of local-PC testing — accepted:
+real-conditions testing from day 1, no migration later. Iran-based hosting is
+REJECTED as technically impossible, not just risky: Cfx.re/Cloudflare blocks
+Iranian IP ranges — Iran-hosted servers can't authenticate or appear in the
+server list (confirmed via Cfx.re forum reports, 2024-2026). Location shortlist:
+Turkey (lowest ping ~40-80ms from Iran) vs Germany (~80-120ms, best
+infrastructure/price, proven by existing Persian servers). RP tolerates
+80-150ms. Pending: friends' ping on Sunset RP as the acceptance bar; buy via
+Iranian toman-based resellers due to payment sanctions. ~8GB RAM VPS,
+~$10-20/month to start.
