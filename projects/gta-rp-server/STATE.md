@@ -15,6 +15,8 @@ Waiting on VPS location choice (Turkey vs Germany) to close Phase 0.
   and what they love/hate about Sunset (Phase 2 design input)
 - Owner: BEFORE buying VPS, ask host support about GitHub/DockerHub access & sanctions
 - Owner: rent Iranian dev VPS — 8GB RAM + high-clock CPU (single-thread!) + NVMe + anti-DDoS
+  (hosts: Tehran Gaming / ParsVDS / Faraso — see DECISIONS.md)
+- Phase 1 first step: test whether Claude Code can log in from the Iran VPS IP
 - Claude: study VMP Academy docs for server setup specifics before writing the guide
 - Phase 1: write the VPS setup guide (Persian) — Linux + FXServer + txAdmin +
   Qbox recipe + MariaDB; verify owner+tester can join, admin panel works end-to-end

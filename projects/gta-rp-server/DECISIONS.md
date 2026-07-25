@@ -125,3 +125,20 @@ Concrete order for the owner to place with an Iranian game host:
 Rough price: ~200-400k toman/month. Linux over Windows deliberately (admin panel is
 web-based, so OS choice doesn't burden the owner). This is the spec for the setup
 guide in Phase 1.
+
+## 2026-07-25 — Working model: Claude Code directly on the dev server (SSH)
+Owner proposes: connect to the VPS via VS Code over SSH, install Claude Code on
+the server, and let Claude operate the server directly (install resources, edit
+config, live-debug) instead of the slower copy-paste-guide loop. Endorsed as the
+best workflow FOR THE DEV SERVER.
+ONE thing to test first: Claude Code is an Anthropic (US) product and must reach
+Anthropic's API. From an Iranian server IP, OFAC sanctions may block Claude's own
+login/connection — this risk is more serious for Claude than for GitHub because it
+checks the source IP directly. Test on first login.
+- If Claude connects from the Iran VPS → adopt the direct-operate workflow.
+- If blocked → Plan B: Claude prepares everything in this workspace, owner runs it
+  via VS Code SSH. Slower but fully works. Not a blocker.
+Security: direct automated access is acceptable ONLY on the dev server (nothing
+valuable; disposable). At public launch, the production server is NOT handed to any
+automated agent — reuse the dev/prod split.
+Host shortlist recorded: Tehran Gaming (preferred), ParsVDS, Faraso, TopMix, MTServer.

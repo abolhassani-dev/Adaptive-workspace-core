@@ -24,6 +24,7 @@ Gate to Phase 1: VPS location chosen and server rented.
 ## Phase 1 — Engine on: bare server + admin panel
 Gate to Phase 2: owner & tester join the server; admin panel fully working.
 
+- [ ] Test Claude Code login from the Iran VPS (OFAC/IP risk) → pick direct-operate vs Plan B
 - [ ] Study VMP server docs (VMP Academy) — server files, master list, panel specifics
 - [ ] Persian step-by-step VPS setup guide (written by Claude, followed by owner)
 - [ ] VMP server + admin panel installed and reachable in browser
