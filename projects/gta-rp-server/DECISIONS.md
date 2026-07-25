@@ -77,3 +77,16 @@ instinct, adopted but re-shaped — dev/prod split activates at public launch
 Foreign VPS dropped entirely. Watch item: Iranian DCs sometimes struggle
 downloading from GitHub/foreign sources (two-way sanctions) — known workarounds
 exist; revisit only if it bites in Phase 1.
+
+## 2026-07-25 — Sanctions/download risk on Iranian VPS: real but mitigated
+Owner flagged that an Iranian VPS may fail to download some resources (GitHub,
+Docker, npm, Linux package repos) due to OFAC sanctions / "Forbidden" errors.
+Confirmed real (2026 escalation tightened it). Mitigations, in order:
+(1) VMP core + many popular scripts are hosted on Iran-friendly infra — download fine;
+(2) use the host's internal mirrors (Docker/npm/PyPI/apt) — most Iranian game hosts
+    provide these;
+(3) fallback: Claude assembles any blocked foreign resource, owner downloads it via
+    their own (working) connection and uploads to the server — one-time setup cost.
+ACTION before buying: ask the host support two questions — (a) direct GitHub/DockerHub
+access or internal mirror? (b) any sanction issues running a VMP/FiveM server? Pick a
+host that answers yes/handled. Prefer gaming-focused hosts (their whole market is this).

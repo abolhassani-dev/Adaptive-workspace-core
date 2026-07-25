@@ -17,7 +17,8 @@ Gate to Phase 1: VPS location chosen and server rented.
 - [x] GTA 6 timing assessed: 3-5+ year runway for GTA V RP in Iran — project worth doing
 - [x] Friends' ping check on Sunset RP: 14-60ms → Sunset hosts in Iran; our VPS = Iran
 - [ ] Friends' likes/complaints about Sunset RP → Phase 2 design input
-- [ ] Rent Iranian game VPS (~8GB RAM, anti-DDoS, toman pricing)
+- [ ] Ask host support: GitHub/DockerHub access or internal mirror? sanction issues?
+- [ ] Rent Iranian game VPS (~8GB RAM, anti-DDoS, toman pricing) — one that passed the check
 
 ## Phase 1 — Engine on: bare server + admin panel
 Gate to Phase 2: owner & tester join the server; admin panel fully working.

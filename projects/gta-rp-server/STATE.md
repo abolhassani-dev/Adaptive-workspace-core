@@ -13,6 +13,7 @@ Waiting on VPS location choice (Turkey vs Germany) to close Phase 0.
 ## Next
 - Owner: ask friends their in-game ping on Sunset RP (sets the acceptance bar)
   and what they love/hate about Sunset (Phase 2 design input)
+- Owner: BEFORE buying VPS, ask host support about GitHub/DockerHub access & sanctions
 - Owner: rent Iranian game VPS (~8GB RAM, anti-DDoS — e.g. Tehran Gaming, ParsVDS)
 - Claude: study VMP Academy docs for server setup specifics before writing the guide
 - Phase 1: write the VPS setup guide (Persian) — Linux + FXServer + txAdmin +
