@@ -112,3 +112,16 @@ loop on ONE thread → single-thread clock speed wins. 4 fast cores (4.5GHz+) be
 Decision fits our dev/prod split: dev server = 8GB + high-clock CPU + NVMe (cheap,
 fine now); rent the 16GB+ box only at public launch. When buying, ask host about
 single-thread CPU clock and NVMe, not just RAM/core count.
+
+## 2026-07-25 — FINAL dev-server spec (the "what to buy" answer)
+Concrete order for the owner to place with an Iranian game host:
+- RAM: 8GB (12 if price gap is small)
+- CPU: >=4 cores, high clock >=3.5GHz (single-thread is what matters)
+- Disk: NVMe SSD, >=50GB
+- OS: Ubuntu 22.04 (Linux — cheaper/lighter/standard; setup guide targets it)
+- Network: anti-DDoS + unmetered/high traffic
+- Location: inside Iran
+- Verify: GitHub/Docker download OK (no sanction block)
+Rough price: ~200-400k toman/month. Linux over Windows deliberately (admin panel is
+web-based, so OS choice doesn't burden the owner). This is the spec for the setup
+guide in Phase 1.
