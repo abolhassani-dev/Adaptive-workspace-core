@@ -100,3 +100,15 @@ work from Iran; DockerHub has been the main occasional offender, and mirrors han
 it. Net: the download risk from the prior entry is real but SMALL and often absent.
 Keep the single pre-purchase question to the host as the cheap confirmation; drop
 any heavier mitigation planning unless Phase 1 actually hits a 403.
+
+## 2026-07-25 — Corrected VPS specs (the earlier "8GB" was for dev only)
+Real requirements by player count (FiveM/VMP RP, 2026 data):
+- 5-15 players (our dev/test phase: owner+tester+friends): 8GB RAM — genuinely enough.
+- 30-40 players (early public): ~12GB.
+- 64 players with vehicle packs + MLOs + many scripts (serious public launch): 16-24GB.
+CPU is MORE important than RAM and is where people err: FiveM/VMP runs its main
+loop on ONE thread → single-thread clock speed wins. 4 fast cores (4.5GHz+) beat
+16 slow/shared vCPUs. Storage: NVMe SSD (not SATA) matters for asset load/sync.
+Decision fits our dev/prod split: dev server = 8GB + high-clock CPU + NVMe (cheap,
+fine now); rent the 16GB+ box only at public launch. When buying, ask host about
+single-thread CPU clock and NVMe, not just RAM/core count.

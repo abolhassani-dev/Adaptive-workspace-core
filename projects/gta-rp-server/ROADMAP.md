@@ -18,7 +18,8 @@ Gate to Phase 1: VPS location chosen and server rented.
 - [x] Friends' ping check on Sunset RP: 14-60ms → Sunset hosts in Iran; our VPS = Iran
 - [ ] Friends' likes/complaints about Sunset RP → Phase 2 design input
 - [ ] Ask host support: GitHub/DockerHub access or internal mirror? sanction issues?
-- [ ] Rent Iranian game VPS (~8GB RAM, anti-DDoS, toman pricing) — one that passed the check
+- [ ] Rent Iranian dev VPS: 8GB RAM + HIGH-CLOCK CPU (4.5GHz+, single-thread) + NVMe + anti-DDoS
+      (16-24GB box deferred to public launch — see DECISIONS.md)
 
 ## Phase 1 — Engine on: bare server + admin panel
 Gate to Phase 2: owner & tester join the server; admin panel fully working.
