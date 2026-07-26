@@ -59,3 +59,13 @@ There is no test runner on the platform. The pure logic in `lib/text.js` and
 `lib/price.js` is where the real risk lives and is worth exercising directly with node
 before deploying. `npx tgcloud run handlers/message '{...}'` runs a handler locally
 against a synthetic update.
+
+## Verified against the real platform
+
+`docs/tgcloud-sdk.md` is the official SDK reference, copied from what
+`npx tgcloud init` scaffolds — keep it rather than re-deriving the API from the
+web. This project's code was audited against it: no relative or `.js` imports, no
+foreign keys, every `db` call awaited or returned.
+
+Note `npx tgcloud init` runs with **no credentials**, so the scaffold and its docs
+can always be regenerated for comparison without touching the bot's token.
