@@ -10,8 +10,8 @@ compatibility_date = "2026-07-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "ehsan-shop-bot"
-# Filled in by `npx wrangler d1 create ehsan-shop-bot` — paste the id it prints.
-database_id = "PASTE_DATABASE_ID_HERE"
+# Not a secret — it only identifies which D1 database this Worker binds to.
+database_id = "e826ef7f-47b0-4ff5-aa04-662fe1e41066"
 migrations_dir = "migrations"
 
 [observability]
