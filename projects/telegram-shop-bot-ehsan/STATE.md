@@ -115,6 +115,16 @@ is migrated by hand, so a deploy alone will not create the new columns and table
   splitting its posts) and ended with typing `/done`. Now it matches existing products first,
   shows the running list of names with the attached post count, and finishes with a button.
 
+## Live findings, round 4 (2026-07-26) — from Ehsan's first real caption
+- **«قیمت ۷۰۰۰» parsed as no price.** A currency marker was required; real captions omit it.
+  A label or the price position now vouches for a bare number.
+- **Material was overwritten by the pack line.** A label-filled field did not advance the
+  positional pointer, so the next unlabelled line landed on top of it. Also «در هر بسته …» is
+  now recognised as the pack label.
+- **The card showed the wrong product name.** A product entry's canonical name was overriding
+  the post's own title, so a post reading «قالب کنگره ۸/۵» displayed as «قالب کیک یزدی».
+  The post title now wins; the product entry is only for grouping, aliases and a pinned photo.
+
 ## Known gaps (deliberate)
 - Editing a channel post does not update the index (`edited_channel_post` unhandled);
   re-posting is the documented way to change a price, and is written into POSTING-GUIDE.md

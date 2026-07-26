@@ -106,18 +106,6 @@ export function sanitize(input) {
   return toPersianDigits(kept.join('\n').trim());
 }
 
-// The product name: first line of the caption that reads like a name.
-export function extractTitle(caption, isPriceOnlyLine = () => false) {
-  const clean = sanitize(caption);
-  for (const line of clean.split('\n')) {
-    const t = line.trim();
-    if (t.length < 2) continue;
-    if (isPriceOnlyLine(t)) continue;   // a price is not a name
-    return t.length > 80 ? `${t.slice(0, 79)}…` : t;
-  }
-  return '';
-}
-
 /**
  * Store phone numbers the way Ehsan will dial them. Telegram hands back
  * "989123456789" with no plus; as-is that is neither tappable nor recognisable.

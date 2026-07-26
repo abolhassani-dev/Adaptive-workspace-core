@@ -485,3 +485,38 @@ The names screen now also shows the running list, how many posts are attached, a
 
 Aliases are stored normalized (digits folded to Latin for matching) but rendered back to Persian
 digits, so Ehsan reads «کاسه ۸.۵» rather than «کاسه 8.5».
+
+## 2026-07-26 — Three bugs found by Ehsan's first real caption
+His actual post exposed three separate faults at once. The caption, verbatim:
+
+```
+قالب کنگره ۸/۵
+قیمت ۷۰۰۰
+جنس حلب، قطر دهنه ۹ سانت
+در هر بسته ۲۵۰۰ عدد
+```
+
+**1. No price parsed.** «قیمت ۷۰۰۰» carries no «تومان», and the parser demanded a currency
+marker. Real captions leave it off routinely. Fixed: a **label or the price position already
+says the number is a price**, so a bare number is accepted there. Elsewhere a currency marker is
+still required — and a line like «۱۲ عدد» is still rejected, because a bare number must be the
+*whole* line to count.
+
+**2. Material showed «در هر بسته ۲۵۰۰ عدد».** The «جنس …» label had filled the material, but the
+positional pointer never advanced past a label-filled field, so the next unlabelled line
+overwrote it. Fixed by skipping fields a label already answered. Also widened the pack label to
+accept a leading «در», which real captions use.
+
+**3. The card said «قالب کیک یزدی» for a post titled «قالب کنگره ۸/۵».** The product entry's
+canonical name was overriding the post's own title. Wrong: a product created earlier as one name
+would rename every post later linked to it, showing the customer a name for a different item.
+The product entry exists to **group and to match aliases**, not to rename what Ehsan wrote — the
+post's own title now wins, and the product is consulted only for a pinned photo.
+
+Also removed `extractTitle()` from `text.js`, dead since the template made line 1 the name
+unconditionally. Cutting it accidentally took `normalizePhone` with it; the Worker build caught
+the missing export before it could ship — worth keeping `wrangler deploy --dry-run` in the loop
+for exactly this.
+
+48 assertions pass, and the real caption now yields
+`title=قالب کنگره ۸/۵ · price=7000 · material=حلب، قطر دهنه ۹ سانت · pack=۲۵۰۰ عدد`.

@@ -97,11 +97,13 @@ export async function searchProducts(rawQuery) {
     g.offers.sort(newestFirst);
     g.best = g.offers[0];
 
+    // The **post's own title wins** for display. The product entry exists to group
+    // and to match aliases, not to rename what Ehsan wrote: a product created
+    // months ago as «قالب کیک یزدی» was overwriting a fresh post that says
+    // «قالب کنگره ۸/۵», so the customer saw a name for a different item.
     const linked = g.key.startsWith('p:') ? productNames.get(g.best.productId) : null;
-    if (linked) {
-      g.title = linked.name;
-      if (linked.photoId) g.pinnedPhotoId = linked.photoId;
-    }
+    if (linked?.photoId) g.pinnedPhotoId = linked.photoId;
+    if (!g.title && linked) g.title = linked.name;
     result.push(g);
   }
 
@@ -143,14 +145,14 @@ export async function getGroupForPost(postId) {
   const offers = siblings.length > 0 ? siblings : [post];
   offers.sort(newestFirst);
 
+  // Same rule as searchProducts: the post's own title is what Ehsan wrote most
+  // recently, so it is what the customer sees.
   let title = post.title;
   let pinnedPhotoId;
   if (post.productId) {
     const linked = await db.select().from(products).where(eq(products.id, post.productId)).get();
-    if (linked) {
-      title = linked.name;
-      if (linked.photoId) pinnedPhotoId = linked.photoId;
-    }
+    if (linked?.photoId) pinnedPhotoId = linked.photoId;
+    if (!title && linked) title = linked.name;
   }
 
   // The tapped post stays the offer being quoted — the customer chose it, and

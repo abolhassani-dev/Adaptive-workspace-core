@@ -27,7 +27,7 @@ import { parsePrice, isPriceOnlyLine } from './price.js';
 const LABELS = [
   ['price',       /^(?:قیمت|فی)\s*[:：\-ـ]*\s*/],
   ['material',    /^(?:جنس|متریال|مواد|جنسیت)\s*[:：\-ـ]*\s*/],
-  ['pack',        /^(?:تعداد\s*(?:هر\s*)?بسته|تعداد\s*در\s*بسته|هر\s*بسته|بسته‌بندی|بسته|تعداد)\s*[:：\-ـ]*\s*/],
+  ['pack',        /^(?:در\s*)?(?:تعداد\s*(?:هر\s*)?بسته|تعداد\s*در\s*بسته|هر\s*بسته|بسته‌بندی|بسته|تعداد)\s*[:：\-ـ]*\s*/],
   ['description', /^(?:توضیحات|توضیح|مشخصات)\s*[:：\-ـ]*\s*/],
 ];
 
@@ -45,6 +45,27 @@ function labelOf(line) {
   return null;
 }
 
+// A line that is only a number, like «۷۰۰۰». In the price position, or after a
+// «قیمت» label, the number is the price even with no «تومان» written — position
+// and label already say what it is. Real captions leave the currency off often.
+function bareNumber(line) {
+  const folded = foldDigits(String(line));
+  const stripped = folded.replace(/[\d.,٬٫\s]/g, '');
+  if (stripped.length > 0) return null;               // «۱۲ عدد» is not a price
+  const n = Number(folded.replace(/[.,٬٫\s]/g, ''));
+  return Number.isFinite(n) && n > 0 ? Math.round(n) : null;
+}
+
+// After a «قیمت» label the wording is free, so take the first number on the line.
+function labelledPrice(line) {
+  const withCurrency = parsePrice(line);
+  if (withCurrency !== null) return withCurrency;
+  const m = foldDigits(String(line)).match(/(\d{1,3}(?:[.,٬٫]\d{3})+|\d+)/);
+  if (!m) return null;
+  const n = Number(m[1].replace(/[.,٬٫]/g, ''));
+  return Number.isFinite(n) && n > 0 ? Math.round(n) : null;
+}
+
 export function parseCaption(raw) {
   const lines = String(raw || '')
     .split('\n')
@@ -55,67 +76,78 @@ export function parseCaption(raw) {
   if (lines.length === 0) return out;
 
   const descriptionParts = [];
-  // Slots are filled in template order by any line that isn't labelled.
   const POSITIONAL = ['price', 'material', 'pack'];
+  let priceDone = false;
   let slot = 0;
+
+  // A field a label already answered must not be overwritten by the next
+  // unlabelled line — that is how «جنس حلب…» got replaced by the pack line.
+  const filled = (field) => (field === 'price' ? priceDone : out[field] !== '');
+  const nextOpenSlot = () => {
+    while (slot < POSITIONAL.length && filled(POSITIONAL[slot])) slot += 1;
+    return slot < POSITIONAL.length ? POSITIONAL[slot] : null;
+  };
 
   out.title = sanitize(lines[0]).split('\n')[0].trim();
 
   for (const line of lines.slice(1)) {
     const labelled = labelOf(line);
     if (labelled) {
-      if (labelled.field === 'description') descriptionParts.push(labelled.value);
-      else if (labelled.field === 'price') {
-        // Keep the whole line: parsePrice needs the currency word to be sure.
-        if (out.price === null) out.price = parsePrice(line);
-        if (slot === 0) slot = 1;
+      if (labelled.field === 'description') {
+        descriptionParts.push(labelled.value);
+      } else if (labelled.field === 'price') {
+        if (!priceDone) {
+          out.price = labelledPrice(line);
+          priceDone = true;
+        }
       } else if (!out[labelled.field]) {
         out[labelled.field] = labelled.value;
       }
       continue;
     }
 
-    // A dash consumes its slot and leaves the field empty.
+    // A dash gives up whichever field is next and leaves it empty.
     if (isSkip(line)) {
-      if (slot < POSITIONAL.length) slot += 1;
+      const field = nextOpenSlot();
+      if (field === 'price') priceDone = true;
+      else if (field) out[field] = ' ';   // marked filled; trimmed to '' at the end
+      slot += 1;
       continue;
     }
 
-    // The price slot: filled by a line that carries a price, or by a «استعلام
-    // قیمت»-style line. Anything else means Ehsan skipped the price line, so the
-    // slot is given up and this line is read as the next field instead of being
-    // swallowed as a price.
-    if (slot === 0) {
-      slot = 1;
-      const p = parsePrice(line);
-      if (p !== null) { out.price = p; continue; }
-      if (NO_PRICE.test(line)) continue;
-      // falls through: this line is the material
+    const field = nextOpenSlot();
+
+    if (field === 'price') {
+      priceDone = true;
+      const withCurrency = parsePrice(line);
+      if (withCurrency !== null) { out.price = withCurrency; slot += 1; continue; }
+      const bare = bareNumber(line);
+      if (bare !== null) { out.price = bare; slot += 1; continue; }
+      if (NO_PRICE.test(line)) { slot += 1; continue; }
+      // Not a price at all: the price line was skipped, so read this line as the
+      // next field instead of swallowing it.
+      slot += 1;
     }
 
-    // Any further line that is nothing but a price — a wholesale figure, say — is
-    // noise, not a field. Without this it would land in the material and push
-    // every later field down a slot.
+    // A stray price line further down — a wholesale figure — is noise, not a field.
     if (isPriceOnlyLine(line)) {
       if (out.price === null) out.price = parsePrice(line);
       continue;
     }
 
-    if (slot < POSITIONAL.length) {
-      out[POSITIONAL[slot]] = line;
+    const target = nextOpenSlot();
+    if (target) {
+      out[target] = line;
       slot += 1;
       continue;
     }
-
     descriptionParts.push(line);
   }
 
-  // A price written outside line 2 and without a label still counts, rather than
-  // the product silently losing its price.
   if (out.price === null) out.price = parsePrice(raw);
 
-  out.material = truncate(sanitize(out.material), 120);
-  out.pack = truncate(sanitize(out.pack), 60);
+  out.material = truncate(sanitize(out.material.trim()), 120);
+  out.pack = truncate(sanitize(out.pack.trim()), 60);
   out.description = truncate(sanitize(descriptionParts.join('\n')), 600);
   return out;
 }
