@@ -144,12 +144,48 @@ Entry format:
 - What: serverless edge compute plus serverless SQL; bot runs as a webhook handler
 - Source: https://developers.cloudflare.com · https://grammy.dev/hosting/cloudflare-workers (official)
 - Gap it addressed: running a Telegram bot 24/7 at zero cost, with no server to maintain
-- Verdict: shortlisted, not yet vetted (2026-07-26)
+- Verdict: fallback only — superseded by Telegram Serverless (2026-07-26)
 - Why: a channel-admin bot receives updates by **webhook**, so it needs no always-on process —
   which is what makes a free serverless tier a genuine fit rather than a compromise. Free tier
   is 100k requests/day with no credit card. Storing Telegram `file_id` instead of images keeps
   storage near zero. Caveats to state plainly to any owner: a free tier carries no service
   guarantee and its limits can change, so identify a paid fallback before depending on it.
 - Access it needs: a Cloudflare account; bot token stored as a secret/env var, never in a repo
-- Used in: telegram-shop-bot-ehsan (design stage, pending build-time vetting)
-- History: 2026-07-26 — surfaced answering a zero-cost hosting requirement
+- Used in: telegram-shop-bot-ehsan (kept as the same-shape fallback, not adopted)
+- History: 2026-07-26 — surfaced answering a zero-cost hosting requirement; same day demoted to
+  fallback when Telegram Serverless turned out to exist. Still the right answer when a bot needs
+  npm packages, file-byte handling, or published quotas — none of which Telegram Serverless offers
+
+## Telegram Serverless (official)
+- What: runs a bot's backend JavaScript on Telegram's own infrastructure — isolated V8 sandbox
+  next to the Bot API, with a built-in SQLite database per bot (schema + query builder),
+  deployed via `npx tgcloud push`, migrated via `npx tgcloud migrate`
+- Source: https://core.telegram.org/bots/serverless (official)
+- Gap it addressed: hosting a Telegram bot 24/7 at genuinely zero cost, with no server to run
+- Verdict: adopted (2026-07-26)
+- Why: official and first-party — no third-party account, no credit card, no VPS, and the
+  database comes with it instead of being a second service to bolt on. For a bot whose owner
+  will not pay anything, this beats every free tier because there is no free tier to age out of.
+  **Check its two constraints against the design before adopting**: no npm packages (official
+  SDK and your own modules only), and file bytes cannot be uploaded or downloaded from a handler
+  (documented as temporary). Passing `file_id` strings around is fine and unaffected.
+  Telegram publishes **no quotas or limits** — confirm on a real deployment before depending on
+  it, and keep a same-shape fallback (Cloudflare Workers + D1) identified in advance.
+- Access it needs: the bot's own token; nothing else
+- Used in: telegram-shop-bot-ehsan
+- History: 2026-07-26 — found only after the owner pushed back on a wrong "Telegram doesn't host
+  bot code" answer. Lesson worth keeping: this platform is new enough that general search and
+  model recall both miss it — read core.telegram.org directly before answering hosting questions
+
+## Vercel free (Hobby) tier as Telegram bot hosting
+- What: serverless functions on Vercel's free plan
+- Source: https://vercel.com (commercial)
+- Gap it addressed: same — zero-cost bot hosting
+- Verdict: rejected (2026-07-26)
+- Why: the Hobby tier **forbids commercial use**, which a shop's order bot plainly is — a
+  licence problem, not a technical one. It also ships no database, so a second free service
+  would have to be attached, adding accounts and moving parts. Worth stating whenever someone
+  proposes Vercel free for a business tool.
+- Access it needs: a Vercel account, plus a separate database provider
+- Used in: —
+- History: 2026-07-26 — evaluated for telegram-shop-bot-ehsan

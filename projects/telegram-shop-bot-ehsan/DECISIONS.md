@@ -124,3 +124,75 @@ Recorded honestly: a free tier has no service guarantee and its limits can chang
 paid fallback (a few dollars a month) stays on the table for something a real business depends
 on. n8n was noted as an alternative host if the owner already runs an instance, but a flow
 builder is a poor fit for hundreds of products plus an alias table.
+
+## 2026-07-26 — CORRECTION: Telegram Serverless exists; it is the host
+**The previous entry was wrong.** The owner pushed back and was right. Telegram does offer
+official hosting for bot backend code: **Telegram Serverless**
+(https://core.telegram.org/bots/serverless). Confirmed from the official docs, not a summary.
+
+What it is: JavaScript in an isolated V8 sandbox running on Telegram's own infrastructure next
+to the Bot API, with a **built-in SQLite database** per bot (schema definition + query builder),
+deployed via `npx tgcloud push` and migrated via `npx tgcloud migrate`. No server, no container,
+no third-party account, no credit card.
+
+Adopted as the host. Its two documented constraints were checked against this design and
+neither bites:
+- *No npm packages* (official SDK + own modules only) — Persian normalization, price parsing
+  and search are dependency-free plain JavaScript.
+- *File bytes cannot be uploaded or downloaded from a handler* (documented as temporary) — the
+  bot only ever passes `file_id` strings and never touches image bytes. This design already
+  avoided that path for cost reasons, so the constraint costs nothing.
+
+Open at build time: Telegram publishes **no quotas or limits**, and the platform is new. Both
+must be confirmed on a real deployment before Ehsan depends on it. Fallback if a hard limit
+appears: Cloudflare Workers + D1 free tier — same shape of system, so it would be re-hosting
+rather than a rewrite.
+
+**Vercel evaluated and rejected**: its free Hobby tier forbids commercial use, and it ships no
+database, so it would need a second free service attached. More accounts, more parts, and a
+licence problem for a bot a business runs on.
+
+Supersedes "Hosting: no Telegram-native hosting exists; serverless free tier instead". The
+Managed Bots note in that entry stands and was a separate, real feature — just not hosting.
+
+## 2026-07-26 — Ehsan's channel IS the reference; supplier attribution demoted to optional
+Asked whether any supplier channel blocks forwarding, the owner answered that it does not
+matter: **the reference is Ehsan's own channel**, and whatever is in it gets quoted. If a
+channel blocks forwarding, Ehsan re-posts by hand.
+
+Consequence: `forward_origin` supplier detection becomes a **bonus, not a dependency**. The
+design must not require it. Resolved by always including a **link to the post in Ehsan's
+channel** in the order notification — Ehsan taps it and sees whose post it is himself, whether
+or not the bot knows. Nothing breaks on a hand-posted item.
+
+Two simplifications fall out and are taken: the "restrict saving content" risk is closed, and
+per-supplier trust ranking (priority ۱/۲/۳) is **dropped from v1** — with the reference being a
+single channel, it was ceremony.
+
+## 2026-07-26 — Cart added; one search entry point, not two
+The owner asked for a home-screen section where the customer types a product name, sees it if
+available, and gets three buttons: add to cart · new inquiry · back. This brings **a cart into
+v1** — previously deferred as the v1.1 "multi-item orders" candidate. Accepted: this trade
+genuinely needs multi-item orders, and the owner asked for it directly.
+
+One change to what was requested: the separate «ثبت سفارش» menu entry is **removed** and merged
+into this flow, which now ends at the cart's «ثبت سفارش». Two menu paths doing the same search
+would be a duplicate path for a non-technical audience, against the owner's own "don't
+complicate it" rule.
+
+Also decided: cart totals are labelled «جمع تقریبی» with a confirmation note. Ehsan verifies
+every price by phone, and a total that looks binding creates an argument he has to fight later.
+
+Entry button worded «استعلام کالا» rather than the owner's alternative «موجودی ما» — Ehsan
+holds no stock, so «موجودی ما» promises availability the bot cannot guarantee. Trivially
+changeable if he prefers his own phrasing.
+
+## 2026-07-26 — Multi-photo posts (albums) supported
+The owner confirmed one product per post, but a post may carry several photos. Albums arrive as
+several messages sharing a `media_group_id`, with the caption on the first. The indexer groups
+them into one product and keeps every `file_id`.
+
+Display constraint: Telegram does not allow buttons on an album. So the product card is sent as
+two messages — the album, then the text block with its buttons directly beneath — which reads
+as a single card in the chat. Accepted over the alternative (one photo plus a "more photos"
+button), which costs the customer an extra tap on every single product view.

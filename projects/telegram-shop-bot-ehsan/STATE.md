@@ -2,40 +2,44 @@
 Updated: 2026-07-26
 
 ## Phase
-**Design closed (v2), pending owner sign-off.** Intake done in two rounds, design rewritten
-after the owner's answers.
+**Design closed (v3), pending owner sign-off.** Intake ran three rounds; design rewritten
+after each.
 **No implementation.** The owner asked explicitly to finalize and close the design first — do
-not write bot code, do not set up hosting, do not touch the bot token until a build is
-explicitly requested.
+not write bot code, do not deploy, do not create the bot token until a build is explicitly
+requested.
 
 ## Done
 - Intake round 1: goal, brokerage model, non-technical-operator constraint
-- Intake round 2 answers folded in — architecture got **simpler**:
-  - Ehsan forwards supplier posts into his own channel where the bot is admin →
-    **the entire MTProto reader is dropped**: no second Telegram account, no phone number,
-    no login session, no account-restriction risk, no background poller. Plain Bot API only.
-  - `forward_origin` identifies the source supplier automatically (verified against the Bot
-    API docs) → suppliers self-populate; Ehsan registers nothing
-  - Posts are name + photo + text description → OCR ruled out entirely, not deferred
-  - Hundreds of products → confirms aliases must be learned from traffic, never pre-entered
-  - Customer never sees the supplier: confirmed by the owner as a hard rule
-  - Zero hosting cost required → webhook-driven serverless; Telegram-hosting belief corrected
-- v2 design written (`DESIGN.md`): architecture, customer flow, **standardized product card**,
-  price parsing, product identity, Ehsan's notification, admin panel, hosting, risks
-- All decisions and superseded decisions recorded (`DECISIONS.md`)
-- Registry updated: MTProto libraries marked moot for this project
+- Intake round 2: Ehsan forwards supplier posts into his own channel where the bot is admin →
+  **the entire MTProto reader dropped** (no second account, no phone number, no login session,
+  no account risk, no background poller). Plain Bot API only. Posts are text → OCR ruled out.
+  Hundreds of products → aliases must be learned from traffic. Hiding the supplier confirmed.
+- Intake round 3:
+  - **Hosting resolved — and an earlier answer of mine corrected.** The owner was right that
+    Telegram added hosting: **Telegram Serverless** (JS in a V8 sandbox on Telegram's own
+    infrastructure, built-in SQLite, `npx tgcloud push`). Adopted. Its two constraints — no npm
+    packages, no file-byte upload/download — were checked and neither affects this design.
+    Vercel evaluated and rejected (Hobby tier forbids commercial use; ships no database).
+  - Ehsan's channel **is** the reference → supplier attribution demoted from required to
+    best-effort; every notification links to the post instead. Forwarding-restriction risk
+    closed; per-supplier trust ranking dropped as ceremony.
+  - **Cart added to v1** at the owner's request, with one merged search entry point rather
+    than two overlapping ones.
+  - Multi-photo posts (albums) supported; card sent as album + text-with-buttons.
+- v3 design written (`DESIGN.md`); all decisions and supersessions recorded (`DECISIONS.md`);
+  registry updated (Telegram Serverless, Vercel rejection, MTProto entries marked moot)
 
 ## Next
-1. Owner sign-off on the v2 design
-2. Answer the three remaining open questions in `PROJECT.md` — the "restrict saving content"
-   check is the only one that can still remove suppliers from the bot's reach
-3. Then, and only on explicit request, start build:
-   - `vet-tools` on Cloudflare Workers + D1 (and a paid fallback) before adopting
-   - approval gate for the bot token
-   - build order: index forwarded posts → search + product card → order capture →
-     Ehsan's notification → admin panel → unmatched-search queue
+1. Owner sign-off on the v3 design
+2. Then, and only on explicit request, start build:
+   - approval gate: create the bot token via BotFather; add the bot as admin to Ehsan's channel
+   - stand up Telegram Serverless and **confirm its real quotas** before anything depends on it
+   - build order: index forwarded posts (incl. albums) → search + product card → cart →
+     order capture → Ehsan's notification → admin panel → unmatched-search queue
+3. Test with a handful of real forwarded posts before Ehsan gives the bot to any customer
 
 ## Blockers / waiting on
 - Owner sign-off on the design; no code until then
-- Approval gate (not yet requested): bot token creation and hosting account. Nothing set up
-  or stored before that approval.
+- Approval gate (not yet requested): bot token creation. Nothing created or stored before that.
+- Telegram Serverless quotas are unpublished — answerable only by deploying, so it is a
+  build-time check, not a question for the owner
