@@ -8,10 +8,11 @@ import {
 } from '../lib/flow.js';
 import {
   sendAdminMenu, createProduct, addAlias, findProducts, deleteCandidates,
+  aliasScreen, productChoice,
 } from '../lib/admin.js';
 import { searchProducts } from '../lib/search.js';
 import { foldDigits, toPersianDigits, truncate, normalizePhone } from '../lib/text.js';
-import { showScreen } from '../lib/screen.js';
+import { showScreen, setScreenMode } from '../lib/screen.js';
 
 const WELCOME = [
   'سلام 👋',
@@ -28,6 +29,10 @@ export default async function (message) {
   // The storefront is one-to-one. Group chats are not a supported surface and
   // answering in them would leak one customer's order to everyone present.
   if (message.chat.type !== 'private') return;
+
+  // The customer just typed, so their message is the last thing in the chat: any
+  // reply has to be a new message at the bottom, not an edit further up.
+  setScreenMode('fresh');
 
   const admin = await isAdmin(tgId);
 
@@ -160,25 +165,24 @@ export default async function (message) {
 
     case 'admin_product_name': {
       if (!admin) { await clearSession(tgId); return; }
+      // Adding names to a product that already exists is the common case — a
+      // fresh product every time would split one item's posts across duplicates.
+      const matches = await findProducts(text);
+      if (matches.length > 0) {
+        await setSession(tgId, 'admin_product_name', { pendingName: text });
+        await showScreen(chatId, tgId, productChoice(text, matches));
+        return;
+      }
       const product = await createProduct(text);
       await setSession(tgId, 'admin_alias', { productId: product.id, name: product.name });
-      await showScreen(chatId, tgId, {
-        text: `✅ کالای «${product.name}» ثبت شد.\n\nحالا اسم‌های دیگری که این کالا در کانال‌ها دارد را یکی‌یکی بفرستید.\nوقتی تمام شد /done را بزنید.`,
-      });
+      await showScreen(chatId, tgId, await aliasScreen(product.id, `✅ کالای «${product.name}» ثبت شد.`));
       return;
     }
 
     case 'admin_alias': {
       if (!admin) { await clearSession(tgId); return; }
-      if (text === '/done') {
-        await clearSession(tgId);
-        await sendAdminMenu(chatId, '✅ ثبت اسم‌ها تمام شد.', tgId);
-        return;
-      }
-      const linked = await addAlias(data.productId, text);
-      await showScreen(chatId, tgId, {
-        text: `➕ «${text}» به‌عنوان اسم دیگرِ «${data.name}» ثبت شد.\nالان ${toPersianDigits(linked)} پست به این کالا وصل است.\n\nاسم بعدی را بفرستید یا /done را بزنید.`,
-      });
+      await addAlias(data.productId, text);
+      await showScreen(chatId, tgId, await aliasScreen(data.productId, `➕ «${text}» ثبت شد.`));
       return;
     }
 

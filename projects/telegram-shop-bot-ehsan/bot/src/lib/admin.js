@@ -192,6 +192,78 @@ export async function addAlias(productId, aliasText) {
   return relinkPosts(productId);
 }
 
+/**
+ * The names screen for one product: what it already answers to, and an invitation
+ * to add another.
+ *
+ * Replaces a flow that always created a **new** product and ended with the admin
+ * typing `/done`. Both were wrong for this user: typing a slash command is not
+ * something to ask of someone whose only skill is Telegram, and always creating
+ * meant a second visit to the same product silently produced a duplicate that
+ * split its posts across two entries.
+ */
+export async function aliasScreen(productId, note = '') {
+  const product = await db.select().from(products).where(eq(products.id, productId)).get();
+  if (!product) return { text: 'این کالا پیدا نشد.', reply_markup: backOnly() };
+
+  const rows = await db.select().from(aliases)
+    .where(eq(aliases.productId, productId)).orderBy(aliases.id).all();
+  const linked = await db.select({ n: count() }).from(posts)
+    .where(and(eq(posts.active, true), eq(posts.productId, productId))).get();
+
+  const lines = [];
+  if (note) lines.push(note, '');
+  lines.push(`🏷 اسم‌های «${product.name}»`, '');
+  if (rows.length === 0) {
+    lines.push('هنوز اسم دیگری ثبت نشده.');
+  } else {
+    // Aliases are stored normalized, which folds digits to Latin for matching.
+    // Render them back so Ehsan reads «کاسه ۸.۵», not «کاسه 8.5».
+    rows.forEach((a, i) => lines.push(`${toPersianDigits(i + 1)}. ${toPersianDigits(a.alias)}`));
+  }
+  lines.push('', `📦 ${toPersianDigits(linked?.n ?? 0)} پست به این کالا وصل است.`);
+  lines.push('', 'اسم دیگری که مشتری‌ها این کالا را با آن صدا می‌کنند بنویسید.');
+
+  return {
+    text: lines.join('\n'),
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: '✅ تمام شد', callback_data: 'alias:done' }],
+        ...(rows.length > 0
+          ? [[{ text: '🗑 حذف آخرین اسم', callback_data: `alias:del:${productId}` }]]
+          : []),
+      ],
+    },
+  };
+}
+
+export async function removeLastAlias(productId) {
+  const last = await db.select().from(aliases)
+    .where(eq(aliases.productId, productId)).orderBy(desc(aliases.id)).get();
+  if (!last) return null;
+  await db.delete(aliases).where(eq(aliases.id, last.id)).run();
+  return last.alias;
+}
+
+// Offered when the typed name already matches something, so a second visit adds
+// names to the existing product instead of creating a rival copy of it.
+export function productChoice(name, matches) {
+  return {
+    text: [
+      `«${name}»`,
+      '',
+      'این کالا از قبل ثبت شده. اسم‌های تازه را به کدام اضافه کنم؟',
+    ].join('\n'),
+    reply_markup: {
+      inline_keyboard: [
+        ...matches.map((p) => [{ text: truncate(`🏷 ${p.name}`, 60), callback_data: `apick:${p.id}` }]),
+        [{ text: '🆕 نه، یک کالای جدید است', callback_data: 'anew' }],
+        [{ text: '↩️ بازگشت', callback_data: 'adm:menu' }],
+      ],
+    },
+  };
+}
+
 export const findProducts = (query, limit = 5) =>
   db.select().from(products)
     .where(like(products.searchName, `%${normalize(query)}%`))

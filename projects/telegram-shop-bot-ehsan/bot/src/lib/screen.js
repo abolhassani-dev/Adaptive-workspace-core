@@ -17,7 +17,24 @@ import { now } from './config.js';
  *    main menu is therefore sent once, separately, and stays put.
  *  - The customer's own typed messages cannot be removed by a bot in a private
  *    chat. Their side of the conversation remains — only the bot's side collapses.
+ *
+ * And one rule that comes from how the chat actually reads, not from the API:
+ *
+ *  - **After the user types, editing is wrong.** Their message is now the last
+ *    thing in the chat, so an edit to the bot's earlier message happens above it
+ *    and looks like nothing happened. On a typed message the old screen is
+ *    deleted and a new one is sent, keeping the bot's reply at the bottom. On a
+ *    button tap nothing new was added, so the edit is visible and is used.
+ *    Handlers declare which case they are via setScreenMode().
  */
+
+let mode = 'edit';
+
+// 'fresh' — the user just typed, so the reply has to be a new message at the
+// bottom. 'edit' — a button was tapped, so rewrite in place.
+export function setScreenMode(next) {
+  mode = next === 'fresh' ? 'fresh' : 'edit';
+}
 
 async function readScreen(tgId) {
   const row = await db.select().from(sessions).where(eq(sessions.tgId, tgId)).get();
@@ -45,7 +62,7 @@ export async function showScreen(chatId, tgId, { text, photo = null, reply_marku
   const kind = photo ? 'photo' : 'text';
   const prev = await readScreen(tgId);
 
-  if (prev.id && prev.kind === kind) {
+  if (prev.id && prev.kind === kind && mode === 'edit') {
     try {
       if (kind === 'text') {
         await api.editMessageText({ chat_id: chatId, message_id: prev.id, text, reply_markup });

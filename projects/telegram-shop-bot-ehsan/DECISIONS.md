@@ -458,3 +458,30 @@ and if Ehsan lists the item again later the names he taught the bot still work.
 Channel posts themselves are untouched and the confirmation screen says so — the bot has no
 business deleting from his channel, and he may want the post to stay while the product is off
 the shop.
+
+## 2026-07-26 — The bot's reply must be the last message, and the alias flow rebuilt
+Two problems the owner hit while using the admin panel, with one shared cause.
+
+**Editing is wrong after the user types.** The single-screen change made every step rewrite one
+message — correct for button taps, actively broken for typed input: the admin's own message is
+now the last thing in the chat, so an edit lands *above* it and reads as "nothing happened".
+That is exactly what "درست کار نمیکنه" was.
+
+Fixed with a per-update mode in `src/lib/screen.js`: `message` handlers declare `fresh` (delete
+the old screen, send a new one at the bottom), `callback_query` handlers declare `edit` (rewrite
+in place, since a tap adds nothing to the chat). Both goals hold at once — the chat does not
+fill up, and the bot's message is always last.
+
+**The alias flow was rebuilt**, because two things about it were wrong for this user:
+- It always created a **new** product, so returning to the same item silently produced a
+  duplicate and split that item's posts across two entries. Now the typed name is matched
+  against existing products first and offers «اسم‌های تازه را به کدام اضافه کنم؟», with an
+  explicit «نه، یک کالای جدید است» escape.
+- It ended with the admin typing **`/done`**. Asking a slash command of someone whose only
+  computer skill is Telegram is a design error. Replaced with a «✅ تمام شد» button.
+
+The names screen now also shows the running list, how many posts are attached, and a «حذف آخرین
+اسم» button — so a typo is fixable without a database, and progress is visible while typing.
+
+Aliases are stored normalized (digits folded to Latin for matching) but rendered back to Persian
+digits, so Ehsan reads «کاسه ۸.۵» rather than «کاسه 8.5».

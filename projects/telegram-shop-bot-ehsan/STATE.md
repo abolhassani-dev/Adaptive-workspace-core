@@ -106,6 +106,15 @@ is migrated by hand, so a deploy alone will not create the new columns and table
   index. It deletes the whole offer group, not the tapped post — a product re-posted three
   times has three rows, and removing only the newest would resurrect the previous price.
 
+## Live findings, round 3 (2026-07-26)
+- **The single-screen change broke typed input.** Editing one message is right for button taps
+  and wrong after the user types: their message is last, so the edit happens above it and looks
+  like nothing happened. Now `message` updates send a fresh screen at the bottom and
+  `callback_query` updates edit in place (`setScreenMode` in `src/lib/screen.js`).
+- **Alias flow rebuilt.** It used to always create a new product (duplicating an item and
+  splitting its posts) and ended with typing `/done`. Now it matches existing products first,
+  shows the running list of names with the attached post count, and finishes with a button.
+
 ## Known gaps (deliberate)
 - Editing a channel post does not update the index (`edited_channel_post` unhandled);
   re-posting is the documented way to change a price, and is written into POSTING-GUIDE.md

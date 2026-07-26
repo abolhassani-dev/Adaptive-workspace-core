@@ -11,8 +11,9 @@ import {
   ordersSummary, createProduct, addAlias, reportView, peopleView,
   resetMenu, confirmReset, runReset,
   deleteProductPrompt, confirmDelete, deleteGroup,
+  aliasScreen, removeLastAlias, createProduct as newProduct,
 } from '../lib/admin.js';
-import { showScreen } from '../lib/screen.js';
+import { showScreen, setScreenMode } from '../lib/screen.js';
 import { toPersianDigits } from '../lib/text.js';
 
 export default async function (cb) {
@@ -20,6 +21,10 @@ export default async function (cb) {
   const chatId = cb.message?.chat?.id;
   const data = cb.data || '';
   if (!tgId || !chatId) return;
+
+  // A button tap adds nothing to the chat, so rewriting the message in place is
+  // both visible and the whole point.
+  setScreenMode('edit');
 
   const ack = (text) => api.answerCallbackQuery({ callback_query_id: cb.id, text }).catch(() => {});
 
@@ -136,7 +141,12 @@ export default async function (cb) {
       await ack();
       await setSession(tgId, 'admin_product_name');
       await showScreen(chatId, tgId, {
-        text: 'نام اصلی کالای جدید را بنویسید:\n(مثلاً: قالب کیک یزدی)',
+        text: [
+          'نام کالا را بنویسید:',
+          '(مثلاً: قالب کیک یزدی)',
+          '',
+          'اگر از قبل ثبت شده باشد، اسم‌های تازه به همان اضافه می‌شود.',
+        ].join('\n'),
         reply_markup: { inline_keyboard: [[{ text: '↩️ بازگشت', callback_data: 'adm:menu' }]] },
       });
       return;
@@ -154,6 +164,43 @@ export default async function (cb) {
       await ack();
       const view = await ordersSummary();
       await showScreen(chatId, tgId, view);
+      return;
+    }
+
+    if (data.startsWith('apick:')) {
+      await ack();
+      const productId = Number(data.slice(6));
+      await setSession(tgId, 'admin_alias', { productId });
+      await showScreen(chatId, tgId, await aliasScreen(productId));
+      return;
+    }
+
+    if (data === 'anew') {
+      await ack();
+      const session = await getSession(tgId);
+      const name = session.data?.pendingName;
+      if (!name) { await sendAdminMenu(chatId, '', tgId); return; }
+      const product = await newProduct(name);
+      await setSession(tgId, 'admin_alias', { productId: product.id, name: product.name });
+      await showScreen(chatId, tgId, await aliasScreen(product.id, `✅ کالای «${product.name}» ثبت شد.`));
+      return;
+    }
+
+    if (data === 'alias:done') {
+      await ack();
+      await clearSession(tgId);
+      await sendAdminMenu(chatId, '✅ ثبت اسم‌ها تمام شد.', tgId);
+      return;
+    }
+
+    if (data.startsWith('alias:del:')) {
+      await ack();
+      const productId = Number(data.slice(10));
+      const removed = await removeLastAlias(productId);
+      await showScreen(chatId, tgId, await aliasScreen(
+        productId,
+        removed ? `🗑 «${toPersianDigits(removed)}» حذف شد.` : '',
+      ));
       return;
     }
 
