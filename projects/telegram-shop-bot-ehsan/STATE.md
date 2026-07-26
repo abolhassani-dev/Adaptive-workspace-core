@@ -2,44 +2,42 @@
 Updated: 2026-07-26
 
 ## Phase
-**Design closed (v3), pending owner sign-off.** Intake ran three rounds; design rewritten
-after each.
-**No implementation.** The owner asked explicitly to finalize and close the design first — do
-not write bot code, do not deploy, do not create the bot token until a build is explicitly
-requested.
+**v1 built, not yet deployed.** Design closed after three intake rounds; code written
+against Telegram Serverless and living in `bot/`.
+
+Deployment is the owner's step — it needs the CLI access token from BotFather, which must
+never come through this repository or the chat.
 
 ## Done
-- Intake round 1: goal, brokerage model, non-technical-operator constraint
-- Intake round 2: Ehsan forwards supplier posts into his own channel where the bot is admin →
-  **the entire MTProto reader dropped** (no second account, no phone number, no login session,
-  no account risk, no background poller). Plain Bot API only. Posts are text → OCR ruled out.
-  Hundreds of products → aliases must be learned from traffic. Hiding the supplier confirmed.
-- Intake round 3:
-  - **Hosting resolved — and an earlier answer of mine corrected.** The owner was right that
-    Telegram added hosting: **Telegram Serverless** (JS in a V8 sandbox on Telegram's own
-    infrastructure, built-in SQLite, `npx tgcloud push`). Adopted. Its two constraints — no npm
-    packages, no file-byte upload/download — were checked and neither affects this design.
-    Vercel evaluated and rejected (Hobby tier forbids commercial use; ships no database).
-  - Ehsan's channel **is** the reference → supplier attribution demoted from required to
-    best-effort; every notification links to the post instead. Forwarding-restriction risk
-    closed; per-supplier trust ranking dropped as ceremony.
-  - **Cart added to v1** at the owner's request, with one merged search entry point rather
-    than two overlapping ones.
-  - Multi-photo posts (albums) supported; card sent as album + text-with-buttons.
-- v3 design written (`DESIGN.md`); all decisions and supersessions recorded (`DECISIONS.md`);
-  registry updated (Telegram Serverless, Vercel rejection, MTProto entries marked moot)
+- Intake rounds 1–3 and the v3 design (`DESIGN.md`), all decisions in `DECISIONS.md`
+- Owner created the bot and made it admin in Ehsan's reference channel
+- **v1 implemented** — 15 modules under `bot/`:
+  - `handlers/channel_post.js` — indexes every forwarded post, folds albums (several
+    photos, one product) into one row, ages out old posts
+  - `handlers/message.js` — customer flow, checkout, admin text steps; any plain message
+    is treated as a search
+  - `handlers/callback_query.js` — all buttons, including Ehsan's order status taps
+  - `lib/` — Persian normalization + supplier-branding sanitization, price parsing,
+    search with alias widening, cart/order/notification, admin panel
+- **Tested what can be tested without deploying**: all 15 files parse, and the pure logic
+  (normalization, price parsing, sanitization) passes 31 direct assertions
+- **Found and fixed a bug that would have shipped silently**: `\b` never matches after a
+  Persian letter in JavaScript, so no price parsed at all. See DECISIONS.
+- `bot/README.md` — setup and daily-use guide in Persian for the owner and Ehsan
+- `bot/AGENTS.md` — invariants and Persian-text gotchas for whoever edits this next
 
 ## Next
-1. Owner sign-off on the v3 design
-2. Then, and only on explicit request, start build:
-   - approval gate: create the bot token via BotFather; add the bot as admin to Ehsan's channel
-   - stand up Telegram Serverless and **confirm its real quotas** before anything depends on it
-   - build order: index forwarded posts (incl. albums) → search + product card → cart →
-     order capture → Ehsan's notification → admin panel → unmatched-search queue
-3. Test with a handful of real forwarded posts before Ehsan gives the bot to any customer
+1. Owner deploys: `npx tgcloud login` → `push` → `migrate` → `webhook sync` (README has it)
+2. **Then `/setadmin` immediately**, before the bot is shared — first sender claims admin
+3. Forward a handful of real supplier posts and check: does the card show the right photo,
+   price and date, and is every trace of the supplier gone from the description?
+4. **Confirm Telegram Serverless quotas on the real deployment** — still unpublished, and
+   this is the last open risk before Ehsan depends on it
+5. Only after that, hand the bot to a few real customers
 
 ## Blockers / waiting on
-- Owner sign-off on the design; no code until then
-- Approval gate (not yet requested): bot token creation. Nothing created or stored before that.
-- Telegram Serverless quotas are unpublished — answerable only by deploying, so it is a
-  build-time check, not a question for the owner
+- Deployment and `/setadmin` — owner's step, needs the BotFather CLI token
+- Telegram Serverless quotas remain unknown until deployed
+- Real supplier posts needed to tune price parsing; ambiguous captions deliberately parse
+  to "no price", so if real posts commonly carry two prices, `FRESHNESS_DAYS` and the
+  ambiguity rule are the first things to revisit

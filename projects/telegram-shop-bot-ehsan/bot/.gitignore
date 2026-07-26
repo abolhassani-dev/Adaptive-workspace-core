@@ -1,0 +1,3 @@
+# CLI credentials — the Serverless access token lives here. Never commit.
+.tgcloud/
+node_modules/

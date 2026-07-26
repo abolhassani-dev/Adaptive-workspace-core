@@ -196,3 +196,40 @@ Display constraint: Telegram does not allow buttons on an album. So the product 
 two messages — the album, then the text block with its buttons directly beneath — which reads
 as a single card in the chat. Accepted over the alternative (one photo plus a "more photos"
 button), which costs the customer an extra tap on every single product view.
+
+## 2026-07-26 — Build started; v1 implemented on Telegram Serverless
+The owner created the bot and made it admin in Ehsan's reference channel — the two
+prerequisites named at sign-off — so implementation began. Code lives in `bot/`.
+
+Implementation decisions worth keeping:
+
+- **Admin identity is set at runtime, not committed.** A one-time `/setadmin` claims the
+  admin role and only works while no admin exists; the id is stored in a `settings` table.
+  Nothing identifying enters the repository, and `lib/config.js` holds only tunables.
+  Trade-off recorded: the claim is first-come, so it must be run before the bot is shared.
+- **No `parse_mode` anywhere.** Supplier captions and customer names are arbitrary text;
+  passing them through a Markdown/HTML parser turns a stray character into a failed send.
+  Structure comes from emoji and line breaks instead.
+- **Any plain text message is treated as a search.** Customers type the product name
+  directly far more often than they tap a menu button first.
+- **Group chats are ignored.** The storefront is one-to-one; answering in a group would
+  show one customer's cart and phone number to everyone in it.
+- **Prune runs inline, sampled** (roughly one post in twenty) rather than on a schedule —
+  the platform is event-driven and this avoids needing a cron path at all.
+
+## 2026-07-26 — Bug found by testing: Persian regex word boundaries
+Price parsing was written with `تومان\b` and **never matched anything** — every single
+price returned null, which would have shipped a bot that quoted «نیاز به استعلام» for
+every product in the catalogue while looking perfectly healthy.
+
+Cause: JavaScript's `\b` is defined over `[A-Za-z0-9_]`, so there is no word boundary
+after a Persian letter. Fixed with a lookahead, `(?![؀-ۿ])`, which also does a job the
+`\b` never could: it stops the bare «ت» from matching inside «۲۰۰۰ تایی» and inventing a
+price out of a pack size.
+
+Found by running `lib/text.js` and `lib/price.js` directly under node against 31 cases
+(Persian/Arabic digits, ZWNJ, ي/ی folding, grouped separators, هزار/میلیون, ریال
+conversion, ambiguous multi-price captions, and caption sanitization). Worth repeating
+before any future deploy — the platform has no test runner, and this class of bug is
+invisible until a real customer searches. Recorded in `bot/AGENTS.md` so it is not
+reintroduced.
