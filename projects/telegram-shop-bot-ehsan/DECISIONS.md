@@ -66,3 +66,61 @@ Telethon, the usual choice, was **archived in February 2026** — not a dependen
 new project on. Maintained candidates: Kurigram and Pyrofork (both Pyrogram forks). Decision
 deferred to build time via the `vet-tools` protocol with a fresh maintenance check. Recorded
 in `toolbox/REGISTRY.md`.
+
+## 2026-07-26 — Reader architecture reversed: manual forwarding becomes the design, MTProto dropped
+The owner answered that **Ehsan already forwards supplier posts into his own channel** every
+day, and the bot is admin there. That makes yesterday's fallback the primary design and removes
+the entire MTProto reader: no second Telegram account, no phone number, no login session, no
+account-restriction risk, no unattended background poller. Everything runs on the plain Bot API.
+
+Unexpected bonus found while verifying: a forwarded post carries `forward_origin` naming the
+original channel, so the bot identifies the source supplier **automatically**. Ehsan forwards
+and does nothing else — no tagging, and the admin panel no longer needs channel registration;
+suppliers self-populate. Verified against core.telegram.org/bots/api.
+
+New risk this introduces: if a supplier channel enables "restrict saving content", its posts
+cannot be forwarded at all. Must be checked per channel before build.
+
+Supersedes the 2026-07-26 decision "How supplier channels get read". Registry entries for
+Telethon / Kurigram / Pyrofork are now moot for this project and marked accordingly.
+
+## 2026-07-26 — Product card: bot composes it, never forwards or copies the supplier's post
+The owner wants the product photo, price and description shown to the customer, in a format
+we standardize. Decided: the bot sends the photo by `file_id` with **its own caption** in a
+fixed four-block layout (name → price → date → description), rather than forwarding or
+`copyMessage`-ing the original post.
+
+Rationale: forwarding would show «Forwarded from فروشگاه حامد», and even a copy carries the
+supplier's caption verbatim — which typically contains their @username, channel link, and
+phone number. Either would hand Ehsan's customer straight to his supplier, breaking the rule
+the owner just confirmed. So descriptions are **sanitized** (usernames, t.me links, phone
+numbers, "call to order" CTAs stripped), and any text that cannot be confidently cleaned is
+dropped rather than shown. Prices and dates are re-rendered in one canonical form.
+
+Storing only `file_id` and never the image also removes image storage from the cost model
+entirely — Telegram keeps the file and re-serves it on demand.
+
+## 2026-07-26 — Hundreds of products confirms the learn-from-traffic approach
+Ehsan trades in **hundreds** of items. This turns "aliases are learned, not pre-entered" from
+a nice-to-have into the decision the project's survival depends on: asking a user with no
+computer skills to enter hundreds of products with their synonyms up front is the single most
+likely way this bot is never used. Normalized text search carries day one; the
+«جستجوهای بی‌نتیجه» queue grows the catalogue one tap at a time out of real customer demand.
+
+## 2026-07-26 — Hosting: no Telegram-native hosting exists; serverless free tier instead
+The owner believed Telegram recently added bot **hosting**. It did not. The feature is
+**Managed Bots** (Bot API 9.6, April 2026): a parent bot can create and manage child bots and
+obtain their tokens via a deep link, replacing BotFather token copy-paste. It manages bot
+*identities*, not bot *code* — the logic still runs on infrastructure we provide. (Worth
+remembering for later: if Ehsan ever wants to hand the same bot to other shopkeepers, Managed
+Bots is exactly the mechanism.)
+
+Zero cost is still reachable, because this bot needs **no always-on process** — the bot is
+channel admin, so Telegram pushes updates by webhook; nothing polls or idles. Direction:
+**Cloudflare Workers + D1 free tier** (100k requests/day, no credit card) against a workload of
+a few hundred posts and orders per day. Final choice via `vet-tools` at build time.
+
+Recorded honestly: a free tier has no service guarantee and its limits can change, so a
+paid fallback (a few dollars a month) stays on the table for something a real business depends
+on. n8n was noted as an alternative host if the owner already runs an instance, but a flow
+builder is a poor fit for hundreds of products plus an alias table.

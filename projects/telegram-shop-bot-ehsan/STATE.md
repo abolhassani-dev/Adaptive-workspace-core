@@ -2,34 +2,40 @@
 Updated: 2026-07-26
 
 ## Phase
-**Design / idea completion.** Intake done, v1 design written (`DESIGN.md`).
-**No implementation.** The owner asked explicitly to finalize and close the design first —
-do not write bot code, do not set up infrastructure, do not touch credentials until the
-design is confirmed and a build is explicitly requested.
+**Design closed (v2), pending owner sign-off.** Intake done in two rounds, design rewritten
+after the owner's answers.
+**No implementation.** The owner asked explicitly to finalize and close the design first — do
+not write bot code, do not set up hosting, do not touch the bot token until a build is
+explicitly requested.
 
 ## Done
-- Intake: goal, brokerage business model, and operator constraints understood
-- Nature classified: software project with a non-technical-operator UX constraint
-- Dimensions scoped in/out with reasons (`PROJECT.md`)
-- Resolved the load-bearing constraint: a Telegram bot cannot read channels it isn't a
-  member of → reader must be a user-account (MTProto) service, with a manual-forwarding
-  fallback (`DECISIONS.md`)
-- v1 design written: customer flow, Ehsan's notification, admin panel, product-alias
-  strategy, out-of-scope list, risk table (`DESIGN.md`)
-- Design decisions recorded, including four additions the original brief did not cover:
-  hide supplier identity from customers, show runner-up suppliers to Ehsan, price freshness
-  labelling, and aliases learned from traffic instead of pre-entered
-- Telethon ruled out (archived Feb 2026); registry entry added for the MTProto library choice
+- Intake round 1: goal, brokerage model, non-technical-operator constraint
+- Intake round 2 answers folded in — architecture got **simpler**:
+  - Ehsan forwards supplier posts into his own channel where the bot is admin →
+    **the entire MTProto reader is dropped**: no second Telegram account, no phone number,
+    no login session, no account-restriction risk, no background poller. Plain Bot API only.
+  - `forward_origin` identifies the source supplier automatically (verified against the Bot
+    API docs) → suppliers self-populate; Ehsan registers nothing
+  - Posts are name + photo + text description → OCR ruled out entirely, not deferred
+  - Hundreds of products → confirms aliases must be learned from traffic, never pre-entered
+  - Customer never sees the supplier: confirmed by the owner as a hard rule
+  - Zero hosting cost required → webhook-driven serverless; Telegram-hosting belief corrected
+- v2 design written (`DESIGN.md`): architecture, customer flow, **standardized product card**,
+  price parsing, product identity, Ehsan's notification, admin panel, hosting, risks
+- All decisions and superseded decisions recorded (`DECISIONS.md`)
+- Registry updated: MTProto libraries marked moot for this project
 
 ## Next
-1. Get answers to the five open questions in `PROJECT.md` — the price-format one
-   (text vs. photos of price lists) is the only one that can change v1's shape materially
-2. Confirm the four added design decisions with the owner, especially hiding the supplier name
-3. Close the design: fold answers into `DESIGN.md`, mark it agreed
-4. Only then, and only on explicit request: pick the MTProto library via `vet-tools`, decide
-   hosting, and ask for approval on the phone number + bot token before any build begins
+1. Owner sign-off on the v2 design
+2. Answer the three remaining open questions in `PROJECT.md` — the "restrict saving content"
+   check is the only one that can still remove suppliers from the bot's reach
+3. Then, and only on explicit request, start build:
+   - `vet-tools` on Cloudflare Workers + D1 (and a paid fallback) before adopting
+   - approval gate for the bot token
+   - build order: index forwarded posts → search + product card → order capture →
+     Ehsan's notification → admin panel → unmatched-search queue
 
 ## Blockers / waiting on
-- Owner's answers to the five open questions
-- Approval gate (not yet requested): the reader needs a dedicated phone number and a Telegram
-  login session; the bot needs a token. Nothing will be set up or stored before that approval.
+- Owner sign-off on the design; no code until then
+- Approval gate (not yet requested): bot token creation and hosting account. Nothing set up
+  or stored before that approval.

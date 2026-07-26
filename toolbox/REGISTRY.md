@@ -87,7 +87,9 @@ Entry format:
   choice, so expect to see it recommended everywhere; that advice is now stale.
 - Access it needs: Telegram user account (phone number + login session)
 - Used in: —
-- History: 2026-07-26 — evaluated for telegram-shop-bot-ehsan, ruled out on maintenance
+- History: 2026-07-26 — evaluated for telegram-shop-bot-ehsan, ruled out on maintenance;
+  same day the need itself disappeared (see approach note below) — kept as a standing warning,
+  since Telethon is still the top recommendation everywhere and that advice is now stale
 
 ## Kurigram / Pyrofork (Pyrogram forks)
 - What: maintained forks of Pyrogram, async Python MTProto clients for user accounts and bots
@@ -99,7 +101,9 @@ Entry format:
   build time — no library gets adopted while the project is still in design.
 - Access it needs: Telegram user account (phone number + login session); read-only usage
 - Used in: —
-- History: 2026-07-26 — surfaced during telegram-shop-bot-ehsan intake
+- History: 2026-07-26 — surfaced during telegram-shop-bot-ehsan intake, then **no longer needed**:
+  the project switched to operator-forwarding + Bot API, so no MTProto client is involved.
+  Entry kept for the next project that genuinely needs user-account reading
 
 ## Telegram user-account reading (MTProto) vs. Bot API (approach note)
 - What: not a tool — the access-path constraint that shapes any "bot reads channels" project
@@ -112,6 +116,40 @@ Entry format:
   bot administers. Worth checking first in any similar project: it decides the architecture.
   Risk profile for a user account: reading channel history is the low-risk usage; member-list
   extraction, mass DMs and mass-adding are what trigger account restrictions.
-- Access it needs: dedicated phone number + login session (never the operator's personal account)
-- Used in: telegram-shop-bot-ehsan (design stage)
-- History: 2026-07-26 — established during telegram-shop-bot-ehsan intake
+  **Check the forwarding route first** — it is strictly simpler and often already how the
+  operator works. Two facts that make it attractive: a forwarded post carries `forward_origin`,
+  so the bot still learns the original channel automatically, and photos can be re-sent by
+  `file_id` forever without storing any image. Its limits: the operator must forward daily, and
+  channels with "restrict saving content" cannot be forwarded from at all.
+- Access it needs: forwarding route — only bot-admin rights in the operator's own channel.
+  MTProto route — dedicated phone number + login session (never a personal account).
+- Used in: telegram-shop-bot-ehsan (design stage — forwarding route)
+- History: 2026-07-26 — established during telegram-shop-bot-ehsan intake; same day the
+  forwarding route was chosen over MTProto and the MTProto dependency dropped entirely
+
+## Telegram "Managed Bots" (Bot API 9.6) — is NOT bot hosting
+- What: a parent bot can create and manage child bots via a deep link and fetch their tokens
+  (`getManagedBotToken`), replacing manual BotFather token copy-paste
+- Source: https://core.telegram.org/bots/api (official, released 2026-04-03)
+- Gap it addressed: none — it was mistaken for a free way to *host* bot code
+- Verdict: documented correction (2026-07-26)
+- Why: Telegram manages bot **identities**, not bot **code**. There is no Telegram-native
+  hosting; logic still runs on infrastructure you provide. Expect users to have heard otherwise.
+  It *is* the right mechanism when one operator wants to hand copies of a bot to many others.
+- Access it needs: bot management mode enabled via the BotFather mini app
+- Used in: telegram-shop-bot-ehsan (ruled out as a hosting answer)
+- History: 2026-07-26 — checked while answering a hosting-cost question
+
+## Cloudflare Workers + D1 (free tier) as Telegram bot hosting
+- What: serverless edge compute plus serverless SQL; bot runs as a webhook handler
+- Source: https://developers.cloudflare.com · https://grammy.dev/hosting/cloudflare-workers (official)
+- Gap it addressed: running a Telegram bot 24/7 at zero cost, with no server to maintain
+- Verdict: shortlisted, not yet vetted (2026-07-26)
+- Why: a channel-admin bot receives updates by **webhook**, so it needs no always-on process —
+  which is what makes a free serverless tier a genuine fit rather than a compromise. Free tier
+  is 100k requests/day with no credit card. Storing Telegram `file_id` instead of images keeps
+  storage near zero. Caveats to state plainly to any owner: a free tier carries no service
+  guarantee and its limits can change, so identify a paid fallback before depending on it.
+- Access it needs: a Cloudflare account; bot token stored as a secret/env var, never in a repo
+- Used in: telegram-shop-bot-ehsan (design stage, pending build-time vetting)
+- History: 2026-07-26 — surfaced answering a zero-cost hosting requirement

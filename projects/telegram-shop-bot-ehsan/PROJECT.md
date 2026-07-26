@@ -29,9 +29,9 @@ because the operator is non-technical. Not a content or marketing project.
 
 ### Essential
 - **Goal & core problem** — broker workflow: search suppliers → quote → capture lead → notify
-- **Software development** — bot + channel reader/indexer + storage; this is the deliverable
-- **Integrations** — Telegram Bot API (storefront) + Telegram MTProto client (reading
-  supplier channels). Two different access paths; see Capability gaps.
+- **Software development** — bot + post indexer + storage; this is the deliverable
+- **Integrations** — Telegram Bot API only. Ehsan forwards supplier posts into his own
+  channel where the bot is admin, so no second access path is needed.
 - **Data & analytics (product identity)** — the hard core of the project: the same physical
   item appears under many names across channels ("قالب کیک یزدی" = "کاسه ۸.۵" = …).
   Needs an alias/synonym layer that Ehsan grows himself over time.
@@ -41,10 +41,15 @@ because the operator is non-technical. Not a content or marketing project.
   button-driven, and never asks him to type structured data or understand a concept.
 - **Privacy** — the bot stores customers' real names and phone numbers. Minimum collection,
   no export, no sharing, and the supplier's identity is never shown to the customer.
-- **Security & secrets** — bot token and the MTProto session file are credentials. Never in
-  this repo; environment variables / server-side only.
-- **Operations & maintenance** — must run 24/7 unattended; the owner (not Ehsan) runs it.
-  A dead reader silently serves stale prices, so it needs a liveness signal.
+- **Content sanitization** — supplier photos and descriptions now reach the customer, and
+  supplier captions carry their own @username / links / phone numbers. Stripping that is what
+  actually enforces "the customer never learns the supplier". Not cosmetic.
+- **Security & secrets** — the bot token is a credential. Never in this repo; environment
+  variables / server-side only.
+- **Operations & maintenance** — the owner (not Ehsan) runs it. If Ehsan stops forwarding,
+  the index silently ages into wrong prices, so it needs a daily liveness signal.
+- **Cost** — must be zero or near-zero. Achievable: the bot is webhook-driven with no
+  always-on process, and images are never stored (only Telegram `file_id`).
 
 ### Optional
 - **Business model support (markup)** — bot could add a % markup on top of the supplier
@@ -53,35 +58,45 @@ because the operator is non-technical. Not a content or marketing project.
   useful for this trade; included as a v1.1 candidate, not a v1 blocker.
 
 ### Deferred
-- **Image/OCR price extraction** — activates if a material share of supplier channels post
-  their price lists as photos rather than text. Must be measured before building.
+- **Multi-item orders** — one order carrying several products. Cheap and this trade needs it;
+  v1.1 candidate, deliberately not a v1 blocker.
 - **Reporting/accounting** — activates when Ehsan asks to track commissions and profit.
 - **Multi-operator** — activates if Ehsan hires an assistant to handle orders.
+- **Handing the bot to other shopkeepers** — would activate Telegram's Managed Bots
+  (Bot API 9.6); noted so it isn't rediscovered later.
 - **Legal/regulatory** — activates only if the bot starts taking payments.
 
-### Irrelevant for now
+### Irrelevant
 Payments, logistics/shipping, inventory management, web dashboard, invoicing.
+**Image/OCR price extraction** — ruled out, not deferred: supplier posts carry name, photo and
+description as *text*, so there is nothing to OCR.
 
 ## Capability gaps
-- **Reading supplier channels** — *the* load-bearing constraint. A Telegram **bot** cannot
-  read a channel it is not a member of, and Ehsan cannot add his bot to other shops'
-  channels. Resolved direction: a separate **reader** logged in as a Telegram *user account*
-  (MTProto) that joins the public supplier channels like any normal subscriber. Fallback if
-  that is unacceptable: Ehsan forwards supplier posts into a private channel where his bot
-  *is* admin (zero risk, but daily manual work). See DECISIONS 2026-07-26.
-- **MTProto library choice** — open. Telethon was archived Feb 2026; Kurigram / Pyrofork are
-  the maintained candidates. Decide at build time via `vet-tools`; see toolbox registry.
+- **Reading supplier channels** — **resolved, no gap.** A bot cannot read channels it isn't in,
+  but Ehsan already forwards supplier posts into his own channel where the bot is admin. Plain
+  Bot API suffices; `forward_origin` even identifies the source supplier automatically. The
+  MTProto reader, its dedicated phone number and its account risk are all gone.
+  See DECISIONS 2026-07-26.
+- **Hosting at zero cost** — direction set, not yet vetted. The bot needs no always-on process
+  (webhook-driven), so a serverless free tier fits: Cloudflare Workers + D1 is the candidate.
+  Confirm via `vet-tools` at build time. Note: Telegram does **not** host bot code.
 - **Persian product-name matching** — no external tool needed. Normalization (Arabic/Persian
   character folding, digit folding, ZWNJ) + Ehsan-curated aliases + an unmatched-search
   learning queue. Built-in capability, no dependency.
+- **Price parsing from free-form Persian captions** — no external tool needed; ambiguous cases
+  must resolve to "no price" rather than a guess.
 
 ## Toolbox (this project)
-*(empty — nothing adopted yet; library selection pending vetting at build time)*
+*(empty — nothing adopted yet; hosting selection pending vetting at build time)*
 
 ## Open questions
-- Are the supplier channels public (joinable by a normal account), and roughly how many?
-- Do those channels post prices as **text/captions** or as **photos** of price lists?
-  This decides whether v1 is feasible as designed or needs the deferred OCR dimension.
-- Roughly how many distinct products does Ehsan actually trade in?
-- Confirm: the customer must never see the supplier's name (protects Ehsan's position).
-- Who pays for and owns the server, and is there a target launch date?
+Answered at intake round 2: channels are handled by Ehsan forwarding into his own channel;
+posts are name + photo + text description; hundreds of products; the customer must never see
+the supplier's name (confirmed); hosting must be zero-cost.
+
+Still open:
+- Do any supplier channels have **"restrict saving content"** enabled? Those posts cannot be
+  forwarded at all, so those suppliers fall outside the bot. Needs a per-channel check.
+- Does any supplier post **multi-item price lists** in one post, rather than one product per
+  post? v1 assumes one product per post and degrades gracefully, but volume matters.
+- Target launch date, and roughly how many customers will use it at first.
