@@ -1,0 +1,20 @@
+# Deployment config for the Telegram shop bot, kept at the repository root on
+# purpose: Cloudflare Workers Builds then needs no "Path" / root-directory
+# setting at all, which was the setting that kept being entered wrong. The bot's
+# code stays where it belongs under projects/.
+#
+# Secrets are NOT here. Set them on Cloudflare:
+#   Worker → Settings → Variables and secrets → BOT_TOKEN, WEBHOOK_SECRET
+
+name = "ehsan-shop-bot"
+main = "projects/telegram-shop-bot-ehsan/bot/src/index.js"
+compatibility_date = "2026-07-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "ehsan-shop-bot"
+database_id = "e826ef7f-47b0-4ff5-aa04-662fe1e41066"
+migrations_dir = "projects/telegram-shop-bot-ehsan/bot/migrations"
+
+[observability]
+enabled = true

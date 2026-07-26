@@ -1,0 +1,16 @@
+{
+  "name": "adaptive-workspace-deploy",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Root-level deploy config so Cloudflare Workers Builds needs no root-directory setting. Project code lives under projects/.",
+  "scripts": {
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.44.6"
+  },
+  "devDependencies": {
+    "wrangler": "^4.42.0"
+  }
+}

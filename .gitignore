@@ -9,3 +9,7 @@ credentials*.json
 # OS / editor noise
 .DS_Store
 Thumbs.db
+
+# Node dependencies (installed by Cloudflare at build time)
+node_modules/
+.wrangler/
