@@ -331,3 +331,36 @@ Reproduced against a real local D1 before and after the fix.
 **Raised with the owner, not decided:** if Ehsan routinely writes two prices in one caption
 (تکی / عمده), much of his catalogue will show «نیاز به استعلام». Which price should win is a
 business decision — likely the single-unit one — and needs his answer before being coded.
+
+## 2026-07-26 — Posting template adopted; "first price wins" replaces "ambiguous means null"
+The owner asked for a **writing template** so Ehsan's posts always parse. Right instinct, and
+it resolves the problem the previous bug exposed rather than patching around it.
+
+Template (`bot/POSTING-GUIDE.md`, written in Persian for Ehsan):
+```
+line 1   product name
+line 2   price
+line 3+  description (any number of lines)
+```
+
+Because position now carries the meaning, the old rule — *a caption with two different prices
+yields no price* — became actively harmful: an everyday «تکی … / عمده …» post produced
+«نیاز به استعلام», so a shop full of normal captions would quote nothing at all. Replaced with
+**the first price written wins**, scanning line by line.
+
+This reverses the earlier decision "an ambiguous price is no price". Recorded as a reversal,
+with the reason it is now the better trade: the risk it guarded against (a confidently wrong
+price) is instead handled by three things already in place — the template puts the real price
+on line 2, every card shows the price's date, and Ehsan confirms by phone before anything
+binds. The cost it imposed (no price at all on ordinary posts) turned out to be much larger
+than the risk it removed.
+
+Deliberately unchanged: a caption with no currency marker anywhere still yields null, so
+«استعلام قیمت» on line 2 is a supported way to publish a product without a price. The order
+still goes through.
+
+Also documented for Ehsan: editing a post does nothing (the bot never sees edits) — re-post to
+change a price, which is also what makes newest-wins work.
+
+Verified with 41 assertions across the template, price-only posts, multi-line descriptions,
+two-price posts, ریال conversion, «هزار» forms, and pack sizes that must not read as prices.

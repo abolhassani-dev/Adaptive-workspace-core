@@ -35,9 +35,12 @@ missing feature was ruled out on purpose.
    description shown to a customer. Ehsan curates his own channel now, so this is a
    safety net rather than the front line — but it stays: the moment he pastes text from a
    supplier, it is the only thing stopping their contact details reaching his customer.
-2. **An ambiguous price is no price.** `parsePrice()` returns null when a caption yields
-   several different numbers. Do not "improve" it into guessing the first or lowest one.
-   A wrong price reaches a customer as fact; a missing one just means Ehsan quotes by phone.
+2. **The first price written wins.** `parsePrice()` scans line by line and returns the first
+   price it finds. This replaced an "ambiguous means null" rule that made ordinary
+   «تکی … / عمده …» captions parse to no price at all. Position now carries the meaning —
+   see `POSTING-GUIDE.md`, the template Ehsan writes to: name on line 1, price on line 2,
+   description after. A caption with no currency marker still yields null, and the card then
+   reads «نیاز به استعلام».
 3. **Every quote carries its date**, and prices past `FRESHNESS_DAYS` are shown as
    «نیاز به استعلام» rather than as firm.
 3b. **Newest post wins, not cheapest.** The channel is Ehsan's own catalogue, so a later

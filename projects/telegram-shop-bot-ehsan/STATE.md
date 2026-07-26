@@ -58,9 +58,10 @@ customers.
   photo and description. A priced older post outranked a newer post whose price could not be
   parsed — and captions with two prices («تکی»/«عمده») parse to no price by design, so this
   triggered on an ordinary caption. Ranking is now newest-only. See DECISIONS.
-- **Open question for Ehsan:** if he routinely writes two prices in one caption, much of the
-  catalogue will read «نیاز به استعلام». Which price should win? Probably the single-unit one,
-  but that is his call, not a code decision.
+- **Resolved (2026-07-26):** the two-prices question is answered by a posting template
+  (`bot/POSTING-GUIDE.md` — name / price / description, one per line) plus a rule change:
+  the **first price written wins**, replacing "ambiguous means null". Hand the guide to Ehsan;
+  everything else follows from it.
 
 ## Next
 1. Ehsan posts ~10 real products in the channel, then check: do the cards read correctly,
@@ -77,6 +78,6 @@ customers.
 
 ## Known gaps (deliberate)
 - Editing a channel post does not update the index (`edited_channel_post` unhandled);
-  re-posting is the documented way to change a price
+  re-posting is the documented way to change a price, and is written into POSTING-GUIDE.md
 - Multi-item orders work, but there is no way for a customer to change a quantity after
   adding — only remove the line and add it again

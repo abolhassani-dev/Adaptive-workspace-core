@@ -35,29 +35,32 @@ function toNumber(raw, multiplierWord, currency) {
 }
 
 /**
- * Parse the price out of a free-form Persian caption.
+ * Parse the price out of a Persian caption: **the first price written wins.**
  *
- * Deliberately conservative: if a caption yields several DIFFERENT prices
- * (wholesale vs retail, a range, two variants), this returns null rather than
- * guessing. A missing price shows «نیاز به استعلام» and Ehsan quotes by phone;
- * a wrong price reaches a customer as fact. The asymmetry is the whole point.
+ * This used to return null whenever a caption held two different prices, so a
+ * perfectly ordinary «تکی … / عمده …» post ended up with no price at all and the
+ * card read «نیاز به استعلام». With a posting template in place (POSTING-GUIDE.md
+ * — name on line 1, price on line 2, description after) position carries the
+ * meaning, so scanning line by line and taking the first price is both
+ * unambiguous and easy to explain: the first price you write is the price your
+ * customers see.
+ *
+ * A caption with no currency marker anywhere still yields null, and the card then
+ * says «نیاز به استعلام» — which is how a deliberately price-less post works.
  */
 export function parsePrice(caption) {
   if (!caption) return null;
-  const text = foldDigits(String(caption));
-  const found = new Set();
 
-  PRICE_RE.lastIndex = 0;
-  let m;
-  while ((m = PRICE_RE.exec(text)) !== null) {
+  for (const line of foldDigits(String(caption)).split('\n')) {
+    PRICE_RE.lastIndex = 0;
+    const m = PRICE_RE.exec(line);
+    if (!m) continue;
     const n = toNumber(m[1], m[2], m[3]);
     // Below 1000 Toman is almost always a stray number that happened to sit
     // next to a "ت" — not a real price in this trade.
-    if (n !== null && n >= 1000) found.add(n);
+    if (n !== null && n >= 1000) return n;
   }
-
-  if (found.size !== 1) return null;
-  return [...found][0];
+  return null;
 }
 
 // Words that carry no information once the price itself has been removed.
