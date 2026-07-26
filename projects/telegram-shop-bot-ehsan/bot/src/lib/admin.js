@@ -1,11 +1,11 @@
-import { db, api } from 'sdk';
-import { eq, and, desc, like } from 'sdk/db';
-import { products, aliases, unmatched, posts } from 'schema';
-import { normalize, toPersianDigits, truncate } from 'lib/text';
-import { relativeDate } from 'lib/dates';
-import { relinkPosts } from 'lib/catalog';
-import { recentOrders, itemsFor } from 'lib/cart';
-import { formatPriceShort } from 'lib/price';
+import { db, api } from '../sdk.js';
+import { eq, and, desc, like, count } from '../db.js';
+import { products, aliases, unmatched, posts } from '../schema.js';
+import { normalize, toPersianDigits, truncate } from './text.js';
+import { relativeDate } from './dates.js';
+import { relinkPosts } from './catalog.js';
+import { recentOrders, itemsFor } from './cart.js';
+import { formatPriceShort } from './price.js';
 
 export const adminMenu = () => ({
   inline_keyboard: [
@@ -18,9 +18,8 @@ export const adminMenu = () => ({
 export async function createProduct(name) {
   const inserted = await db.insert(products)
     .values({ name: truncate(name, 120), searchName: normalize(name) })
-    .returning()
-    .run();
-  const product = Array.isArray(inserted) ? inserted[0] : inserted;
+    .returning();
+  const product = inserted[0];
   await relinkPosts(product.id);
   return product;
 }
@@ -111,7 +110,7 @@ export async function ordersSummary() {
     const items = await itemsFor(o.id);
     const names = items.map((i) => `${i.title} ×${toPersianDigits(i.qty)}`).join('، ');
     lines.push(`#${toPersianDigits(o.id)} — ${label[o.status] || o.status} — ${relativeDate(o.createdAt)}`);
-    lines.push(`   ${o.customerName || '—'} ${toPersianDigits(o.customerPhone || '')}`);
+    lines.push(`   ${o.customerName || '—'} ${o.customerPhone || ''}`);
     lines.push(`   ${truncate(names, 90)}`);
     if (o.total) lines.push(`   جمع تقریبی: ${formatPriceShort(o.total)}`);
     lines.push('');
@@ -122,7 +121,9 @@ export async function ordersSummary() {
 // Daily-ish liveness signal. If Ehsan stops forwarding, the index quietly ages
 // into wrong prices — so silence has to be visible rather than assumed fine.
 export async function indexHealth() {
-  const total = await db.$count(posts, eq(posts.active, true));
+  const counted = await db.select({ n: count() }).from(posts)
+    .where(eq(posts.active, true)).get();
+  const total = counted?.n ?? 0;
   const recent = await db.select().from(posts)
     .where(eq(posts.active, true))
     .orderBy(desc(posts.postedAt))

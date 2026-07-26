@@ -13,9 +13,6 @@ export const POST_MAX_AGE_DAYS = 45;
 // How many candidate products to offer when a search is ambiguous.
 export const MAX_RESULTS = 5;
 
-// Runner-up suppliers listed under each line of Ehsan's order notification.
-export const MAX_ALTERNATIVES = 3;
-
 export const DAY = 86400;
 
 export const now = () => Math.floor(Date.now() / 1000);

@@ -1,16 +1,16 @@
-import { db, api, BotApiError } from 'sdk';
-import { eq } from 'sdk/db';
-import { orders, unmatched } from 'schema';
-import { getSession, setSession, clearSession } from 'lib/session';
-import { isAdmin, addToCart, removeCartItem } from 'lib/cart';
-import { getGroupForPost } from 'lib/search';
-import { sendProductCard, qtyButtons } from 'lib/ui';
-import { showHome, askForSearch, showCart, startCheckout } from 'lib/flow';
+import { db, api, BotApiError } from '../sdk.js';
+import { eq } from '../db.js';
+import { orders, unmatched } from '../schema.js';
+import { getSession, setSession, clearSession } from '../lib/session.js';
+import { isAdmin, addToCart, removeCartItem } from '../lib/cart.js';
+import { getGroupForPost } from '../lib/search.js';
+import { sendProductCard, qtyButtons } from '../lib/ui.js';
+import { showHome, askForSearch, showCart, startCheckout } from '../lib/flow.js';
 import {
   sendAdminMenu, unmatchedList, unmatchedActions, resolveUnmatched,
   ordersSummary, createProduct, addAlias,
-} from 'lib/admin';
-import { toPersianDigits } from 'lib/text';
+} from '../lib/admin.js';
+import { toPersianDigits } from '../lib/text.js';
 
 export default async function (cb) {
   const tgId = cb.from?.id;
@@ -188,7 +188,7 @@ export default async function (cb) {
       await resolveUnmatched(Number(umId));
       await clearSession(tgId);
       await ack('ثبت شد');
-      await sendAdminMenu(chatId, `✅ ثبت شد. ${toPersianDigits(linked)} پست با این اسم پیدا و وصل شد.`);
+      await sendAdminMenu(chatId, `✅ ثبت شد. الان ${toPersianDigits(linked)} پست به این کالا وصل است.`);
       return;
     }
 

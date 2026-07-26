@@ -1,8 +1,10 @@
-# Design v3 — Ehsan's Shop Bot
+# Design v4 — Ehsan's Shop Bot
 
-Revised 2026-07-26 (round 3). Changes from v2: cart added at the owner's request, single
-merged search entry point, media-group (multi-photo) support, supplier attribution demoted
-from required to nice-to-have, and hosting settled on **Telegram Serverless** (official).
+Revised 2026-07-26 (round 4), **built and verified end to end**. Changes from v3: the
+reference channel is Ehsan's own curated catalogue rather than a pile of forwarded
+supplier posts — so ranking is newest-wins, not cheapest, and price comparison across
+shops is gone. Hosting is **Cloudflare Workers + D1** (Telegram Serverless turned out not
+to be available for this account).
 
 Scope rule: **the smallest thing that does the whole job.** Persian strings are the actual
 product copy and are quoted verbatim.
@@ -10,18 +12,18 @@ product copy and are quoted verbatim.
 ## 1. Architecture — one bot, one channel, no server
 
 ```
-supplier channels ──(Ehsan forwards)──▶  Ehsan's channel  ──▶  bot (admin)
-                                          = the reference          │
-                                                                   ▼
-                                                     Telegram Serverless
-                                                     (V8 sandbox + SQLite,
-                                                      on Telegram's own infra)
+Ehsan curates his channel  ──▶  bot (admin there)  ──▶  Cloudflare Worker
+  one post = one product         reads every post        + D1 (SQLite)
+  photos · name · price
 ```
 
-Ehsan's channel **is** the reference. Whatever is in it can be quoted to customers; whatever
-isn't, doesn't exist as far as the bot is concerned. Customers never see or join it.
+Ehsan's channel **is** the catalogue. Whatever is in it can be quoted to customers;
+whatever isn't, doesn't exist as far as the bot is concerned. Customers never see or
+join it — they only ever talk to the bot.
 
-The bot is admin there, so Telegram pushes every new post to it. Nothing polls, nothing idles.
+The bot is admin there, so Telegram pushes every new post to it by webhook. Nothing polls
+and nothing idles, which is what makes a free serverless tier a genuine fit rather than a
+compromise.
 
 ## 2. What the bot stores per post
 
@@ -30,18 +32,17 @@ The bot is admin there, so Telegram pushes every new post to it. Nothing polls, 
 | product text (name + description) | post caption |
 | photos | **`file_id` only** — one or many (§4). Telegram keeps the images; we store nothing |
 | price | parsed from the caption (§6) |
-| supplier | `forward_origin` when the post was forwarded — **optional**, see below |
+| supplier | `forward_origin`, on the rare post Ehsan forwards rather than writes — optional |
 | link to the post in Ehsan's channel | always |
 | date | post date |
 
-**Supplier attribution is best-effort, not required.** If Ehsan forwards, Telegram carries the
-original channel name and the bot records it automatically. If he re-posts by hand (e.g. a
-channel that blocks forwarding), there is no source name — and that is fine, because **every
-order notification links to the post in Ehsan's channel**. He taps it and sees for himself
-whose post it is. Nothing breaks. Per-supplier trust ranking is dropped from v1 as a result.
+**Supplier attribution is incidental.** Ehsan writes his own posts, so usually there is no
+source channel to record — and nothing depends on it, because **every order line links back
+to the post in his channel**. He taps it and sees the product exactly as he published it.
 
-Newest post for a product supersedes older ones; posts past a set age are dropped, so the index
-never serves ancient prices.
+**Newest post for a product supersedes older ones.** This is the rule that makes re-posting
+the way to change a price: post it again and the bot quotes the new number, up or down.
+Posts past a set age drop out of search entirely, so the index never serves stale prices.
 
 ## 3. Customer flow
 
@@ -99,7 +100,7 @@ bot cannot actually guarantee. Easy to change if he prefers his own phrasing.
 
 ## 4. The product card — standardized, and multi-photo
 
-**The bot composes the card itself.** It never forwards and never copies the supplier's post.
+**The bot composes the card itself.** It never forwards and never copies the original post.
 Photos are sent by `file_id`, the text is ours, and the layout is identical every time:
 
 ```
@@ -127,13 +128,15 @@ Fixed rules that make it standard:
 
 - **Always the same four blocks, always in this order:** name → price → date → description.
   A missing field is omitted; the order never changes.
-- **The description is sanitized before display.** Supplier captions routinely carry their own
-  `@username`, `t.me/…` link, and phone number — «برای سفارش تماس بگیرید». All stripped. This
-  is what actually enforces the owner's rule that the customer never learns the supplier; with
-  supplier photos and text now reaching customers, it is the load-bearing safeguard, not a
-  polish step. **Text that cannot be confidently cleaned is dropped, not shown.**
+- **The description is sanitized before display**, stripping `@username`, `t.me/…` links and
+  phone numbers. Ehsan writes his own posts now, so this is a safety net rather than the front
+  line — but it stays: the moment he pastes a caption from a supplier, it is the only thing
+  stopping their contact details reaching his customer. **Text that cannot be confidently
+  cleaned is dropped, not shown.**
+- **A line that is only a price is dropped** from the description — the card already shows the
+  price in its own block, and repeating it reads as a mistake.
 - Prices render in one canonical form — Persian digits, thousands separators, «تومان» —
-  whatever format the supplier used.
+  whatever format the caption used. Digits in the description are rendered Persian too.
 - Dates render relatively — «امروز» / «دیروز» / «۳ روز پیش» — never a raw timestamp.
 - Description truncated to fit Telegram's caption limit.
 
@@ -143,24 +146,23 @@ One message per order, covering every item in the cart:
 
 ```
 🔔 سفارش جدید #۱۰۴۲
-👤 مریم رضایی — ۰۹۱۲۳۴۵۶۷۸۹
+👤 مریم رضایی — 09123456789
 
 ۱. قالب کیک یزدی — ۱۲ عدد
-   💰 ۱۸۵٫۰۰۰ ت — فروشگاه حامد (۲ روز پیش) ↗️ [پست]
-   سایر: قنادی‌سرا ۱۹۰٫۰۰۰ · پخش رضا ۱۹۵٫۰۰۰
+   💰 ۱۹۵٫۰۰۰ ت (امروز)
+۲. کاغذ شیرینی بسته ۵۰۰ عددی — ۵ عدد
+   💰 ۸۰٫۰۰۰ ت (امروز)
 
-۲. کاغذ شیرینی — ۵ بسته
-   💰 ۸۰٫۰۰۰ ت — پخش رضا (امروز) ↗️ [پست]
+جمع تقریبی: ۲٫۷۴۰٫۰۰۰ تومان
 
-جمع تقریبی: ۲٫۶۲۰٫۰۰۰ تومان
-
-📞 تماس با مشتری
-✅ انجام شد        ❌ منتفی شد
+  ↗️ پست ۱   ↗️ پست ۲
+  🔄 در حال پیگیری   ✅ انجام شد
+  ❌ منتفی شد
 ```
 
-- **Runner-ups are shown** because "cheapest" is not always best for Ehsan — that shop may be
-  out of stock, slow, or pay a worse commission. The bot ranks; Ehsan decides.
-- Every line links to the post so he verifies in one tap before phoning.
+- **The phone is rendered in Latin digits**, normalised to `09…`. Telegram only linkifies a
+  number written that way, and tapping to call the customer is the entire next step.
+- Every line links to its post so he verifies in one tap before phoning.
 - **Exactly three states** — `جدید` → `در حال پیگیری` → `بسته‌شده` — one tap each. A richer
   status model is work Ehsan will not do.
 
@@ -174,8 +176,9 @@ costs far more than quoting none.
 
 ## 7. Product identity — the hard problem, at hundreds of items
 
-Ehsan trades in **hundreds** of items, named differently by every shop. Two layers, and layer 1
-works on day one with an empty catalogue:
+Ehsan trades in **hundreds** of items, and customers ask for them by whatever name they know —
+«کاسه ۸.۵» for what he posted as «قالب کیک یزدی». Two layers, and layer 1 works on day one
+with an empty catalogue:
 
 **Layer 1 — normalized text search (automatic).** Fold Arabic ↔ Persian characters (ي/ی، ك/ک),
 fold Persian/Arabic digits, normalize ZWNJ and spacing, then match the customer's words against
@@ -190,8 +193,9 @@ indexed post text. Most searches are answered before Ehsan has defined anything.
   ← کاسه کیک یزدی
 ```
 
-Any of these — from a customer or from a post — resolves to the same product, so prices from
-differently-worded shops line up into one comparable list.
+Any of these — from a customer or from a post — resolves to the same product, so a customer
+finds the item under the name they use, and a re-post supersedes the previous price instead of
+appearing as a second product.
 
 **The critical choice:** Ehsan is *never* asked to enter hundreds of products up front. That
 would guarantee the bot is never used. The table fills itself from real demand, one tap at a
@@ -213,50 +217,56 @@ time, via the queue below.
   like data entry.
 - **سفارش‌ها** — orders by status.
 
-A supplier-management section is **not** needed: Ehsan's channel is the reference, and
-suppliers are recorded automatically where available.
+A supplier-management section is **not** needed: Ehsan's channel is the catalogue.
 
-## 9. Hosting — Telegram Serverless (official, no server, no cost)
+## 9. Hosting — Cloudflare Workers + D1
 
-The owner was right that Telegram added this; the earlier answer here was wrong.
-**Telegram Serverless** runs bot backend code on Telegram's own infrastructure:
+Telegram Serverless was the first choice and would have been the better fit, but it is
+**not available for this account** — the owner checked BotFather and there is no such
+entry, in the bot menu or in Bot Settings. Moved to the fallback identified in advance.
 
-- JavaScript in an isolated **V8 sandbox**, running next to the Bot API
-- a built-in **SQLite database** per bot, with a schema definition and query builder —
-  products, aliases, posts, carts and orders all fit it directly
-- deployed with one command (`npx tgcloud push`); migrations via `npx tgcloud migrate`
-- no server, no container, no scaling, no third-party account, no credit card
+**Cloudflare Workers + D1**, free tier: 100,000 requests/day, no credit card, and no
+prohibition on commercial use. Against a few hundred posts and orders a day this is
+nowhere near a limit. Images cost nothing because only `file_id` is ever stored.
 
-Why it fits this project specifically:
-- **No npm packages** (official SDK and own modules only) — not a problem here. Persian text
-  normalization, price parsing and search are plain JavaScript with no dependencies.
-- **File bytes can't be uploaded or downloaded from a handler** (documented as temporary) —
-  also not a problem: the bot only ever passes `file_id` strings around and never touches
-  image bytes. This design already avoided that path for cost reasons.
+The port cost little because the business logic never depended on the platform: all of
+`lib/` carried over unchanged apart from import paths, absorbed by two shims — a Drizzle
+compatibility layer keeping the `table`/`boolean`/`json` helpers, and `db`/`api` as
+per-request module bindings so no request context had to be threaded through the code.
 
-Honest gaps to close at build time: Telegram does not publish quotas or limits for it, and it
-is new. Both need confirming against a real deployment before Ehsan depends on it. If a hard
-limit turns up, the fallback stays Cloudflare Workers + D1 free tier — the same shape of
-system, so migrating would be re-hosting, not a rewrite.
+Two platform rules the design must respect, both enforced in code:
+- **Always answer HTTP 200**, even when handling fails. A non-200 makes Telegram retry the
+  same update indefinitely — which would replay orders and re-notify Ehsan.
+- The webhook must be registered with `allowed_updates` including `channel_post`, or the
+  bot never receives a single product.
 
 **Vercel was considered and rejected**: its free Hobby tier forbids commercial use, and it
-ships no database, so it would need a second free service bolted on. More parts, more accounts,
-and a licence problem for a business bot.
+ships no database, so it would need a second free service bolted on.
+
+Honest caveat: a free tier carries no service guarantee and its limits can change, so a
+paid tier (a few dollars a month) stays on the table for something a real business runs on.
 
 ## 10. Explicitly out of scope for v1
 
 Online payment · inventory · invoices & accounting · reading prices from images (descriptions
 are text — nothing to OCR) · automatic profit calculation · multiple operators · supplier
-ratings and trust ranking · delivery tracking · any web dashboard.
+ratings and price comparison across shops · delivery tracking · any web dashboard.
+
+Known gap, deliberately left: **editing a post in the channel does not update the index**
+(`edited_channel_post` is not handled). Re-posting is the documented way to change a price,
+and it is also what makes the newest-wins rule work. Worth adding if Ehsan turns out to edit
+in place by habit.
 
 ## 11. Known risks
 
 | Risk | Handling in v1 |
 |---|---|
-| Supplier branding leaks to the customer via a caption | Bot composes its own card; captions sanitized of usernames/links/phones; uncleanable text dropped. §4 |
+| Contact details leak to the customer via a pasted caption | Bot composes its own card; captions sanitized of usernames/links/phones; uncleanable text dropped. §4 |
 | Stale price quoted as current | Every card shows its date; prices past the freshness window show «نیاز به استعلام» instead of a firm quote. |
 | Cart total read as a binding invoice | Labelled «جمع تقریبی» with the confirmation note, in both the cart and Ehsan's notification. |
-| Ehsan stops forwarding and the index quietly ages | Daily message to Ehsan: «امروز N پست اضافه شد.» Zero is visible. |
+| Ehsan stops updating the channel and the index quietly ages | The admin panel always shows the active post count and the date of the newest post. |
 | A wrong price reaches a customer | Ambiguous parses resolve to "no price"; Ehsan confirms by phone before anything binds. |
 | Customer phone numbers leak | Stored minimally, in the bot's own database, never in this repo, no export feature built. |
-| Telegram Serverless quotas unknown / platform is new | Confirm limits on a real deployment before launch; Cloudflare Workers + D1 kept as a same-shape fallback. |
+| A price rise is quoted at the old lower price | Newest post wins, not cheapest. §1, §6 |
+| Telegram retries a failed update forever, replaying orders | The Worker always answers 200 and logs the failure instead. §9 |
+| Free-tier limits or policy change | Paid tier identified in advance; migration is a config change, not a rewrite. |

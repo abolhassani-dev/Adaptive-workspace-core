@@ -1,4 +1,4 @@
-import { foldDigits, toPersianDigits } from 'lib/text';
+import { foldDigits, toPersianDigits } from './text.js';
 
 // Prices are stored as whole Toman.
 
@@ -58,6 +58,30 @@ export function parsePrice(caption) {
 
   if (found.size !== 1) return null;
   return [...found][0];
+}
+
+// Words that carry no information once the price itself has been removed.
+const PRICE_WORDS = /(قیمت|تومان|تومن|ریال|ريال|هزار|میلیون|فی|نقدی|عمده|تکی|تک)/g;
+
+/**
+ * Is this line nothing but a price? Such lines are dropped from the description,
+ * because the card already shows the price in its own block — repeating it
+ * reads as a mistake, and for posts whose caption is just a name and a price it
+ * would make the description a duplicate of the price line.
+ */
+export function isPriceOnlyLine(line) {
+  if (!line) return false;
+  const folded = foldDigits(String(line));
+  PRICE_RE.lastIndex = 0;
+  const hasPrice = PRICE_RE.test(folded);
+  PRICE_RE.lastIndex = 0;
+  if (!hasPrice) return false;
+
+  const rest = folded
+    .replace(PRICE_RE, ' ')
+    .replace(PRICE_WORDS, ' ')
+    .replace(/[^\p{L}]+/gu, '');
+  return rest.length < 3;
 }
 
 // One canonical rendering everywhere, whatever the supplier wrote.

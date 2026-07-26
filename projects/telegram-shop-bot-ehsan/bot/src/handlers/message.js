@@ -1,15 +1,15 @@
-import { api } from 'sdk';
-import { getSession, setSession, clearSession, setSetting } from 'lib/session';
-import { isAdmin, getAdminId, ADMIN_KEY, addToCart } from 'lib/cart';
-import { BTN, mainMenu } from 'lib/ui';
+import { api } from '../sdk.js';
+import { getSession, setSession, clearSession, setSetting } from '../lib/session.js';
+import { isAdmin, getAdminId, ADMIN_KEY, addToCart } from '../lib/cart.js';
+import { BTN, mainMenu } from '../lib/ui.js';
 import {
   askForSearch, runSearch, showCart, startCheckout,
   askForPhone, finishOrder, saveCustomer,
-} from 'lib/flow';
-import { sendAdminMenu, createProduct, addAlias, findProducts } from 'lib/admin';
-import { foldDigits, toPersianDigits, truncate } from 'lib/text';
-import { ordersFor, itemsFor } from 'lib/cart';
-import { relativeDate } from 'lib/dates';
+} from '../lib/flow.js';
+import { sendAdminMenu, createProduct, addAlias, findProducts } from '../lib/admin.js';
+import { foldDigits, toPersianDigits, truncate, normalizePhone } from '../lib/text.js';
+import { ordersFor, itemsFor } from '../lib/cart.js';
+import { relativeDate } from '../lib/dates.js';
 
 const WELCOME = [
   'سلام 👋',
@@ -41,7 +41,7 @@ export default async function (message) {
         });
         return;
       }
-      const customer = await saveCustomer(tgId, { phone: foldDigits(message.contact.phone_number) });
+      const customer = await saveCustomer(tgId, { phone: normalizePhone(message.contact.phone_number) });
       await finishOrder(chatId, tgId, customer);
       return;
     }
@@ -133,7 +133,7 @@ export default async function (message) {
     }
 
     case 'awaiting_phone': {
-      const digits = foldDigits(text).replace(/[^\d+]/g, '');
+      const digits = normalizePhone(text);
       if (digits.replace(/\D/g, '').length < 10) {
         await api.sendMessage({
           chat_id: chatId,
@@ -167,7 +167,7 @@ export default async function (message) {
       const linked = await addAlias(data.productId, text);
       await api.sendMessage({
         chat_id: chatId,
-        text: `➕ «${text}» به‌عنوان اسم دیگرِ «${data.name}» ثبت شد.\n${toPersianDigits(linked)} پست با این اسم پیدا و وصل شد.\n\nاسم بعدی را بفرستید یا /done را بزنید.`,
+        text: `➕ «${text}» به‌عنوان اسم دیگرِ «${data.name}» ثبت شد.\nالان ${toPersianDigits(linked)} پست به این کالا وصل است.\n\nاسم بعدی را بفرستید یا /done را بزنید.`,
       });
       return;
     }

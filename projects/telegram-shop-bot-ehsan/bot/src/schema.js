@@ -1,4 +1,4 @@
-import { table, integer, text, boolean, json, index, sql } from 'sdk/db';
+import { table, integer, text, boolean, json, index, sql } from './db.js';
 
 // All timestamps are plain unix seconds (integers), never Date objects — keeps
 // comparisons with Telegram's `date` field direct and avoids conversion surprises.
@@ -96,8 +96,6 @@ export const orderItems = table('order_items', {
   supplier: text('supplier'),
   postMessageId: integer('post_message_id'),
   postedAt: integer('posted_at'),
-  // "قنادی‌سرا ۱۹۰٫۰۰۰ · پخش رضا ۱۹۵٫۰۰۰" — runner-up offers, rendered at order time
-  alternatives: text('alternatives'),
 }, (t) => ({
   orderIdx: index('idx_order_items_order').on(t.orderId),
 }));

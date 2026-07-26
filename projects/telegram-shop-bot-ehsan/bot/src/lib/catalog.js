@@ -1,9 +1,9 @@
-import { db } from 'sdk';
-import { eq, and, lt } from 'sdk/db';
-import { posts, products, aliases } from 'schema';
-import { normalize, sanitize, extractTitle, truncate } from 'lib/text';
-import { parsePrice } from 'lib/price';
-import { now, DAY, POST_MAX_AGE_DAYS } from 'lib/config';
+import { db } from '../sdk.js';
+import { eq, and, lt } from '../db.js';
+import { posts, products, aliases } from '../schema.js';
+import { normalize, sanitize, extractTitle, truncate } from './text.js';
+import { parsePrice, isPriceOnlyLine } from './price.js';
+import { now, DAY, POST_MAX_AGE_DAYS } from './config.js';
 
 // Largest available size of each photo — Telegram sends an array of sizes.
 function largestPhotoId(photo) {
@@ -26,12 +26,13 @@ function supplierFrom(post) {
 
 function buildFields(caption) {
   const cleanCaption = sanitize(caption || '');
-  const title = extractTitle(caption || '');
-  // The description is everything the caption says beyond its first line, minus
-  // anything that pointed at the supplier.
+  const title = extractTitle(caption || '', isPriceOnlyLine);
+  // The description is what the caption says beyond its name and its price,
+  // minus anything that pointed at the supplier. The card renders price and
+  // date in their own blocks, so repeating them here is pure noise.
   const description = cleanCaption
     .split('\n')
-    .filter((l) => l.trim() && l.trim() !== title)
+    .filter((l) => l.trim() && l.trim() !== title && !isPriceOnlyLine(l))
     .join('\n');
   return {
     caption: caption || '',
@@ -87,9 +88,9 @@ export async function indexPost(post) {
     active: true,
     productId,
     ...fields,
-  }).returning().run();
+  }).returning();
 
-  return Array.isArray(inserted) ? inserted[0]?.id : inserted?.id;
+  return inserted[0]?.id;
 }
 
 // Which canonical product does this post text describe? Matches on any alias or
@@ -115,8 +116,13 @@ export async function resolveProduct(searchText) {
 
 /**
  * Re-link existing posts after Ehsan adds a product or an alias. Without this,
- * a new alias would only affect posts forwarded from that moment on — and the
- * whole point of the learning queue is that it fixes what is already indexed.
+ * a new alias would only affect posts added from that moment on — and the whole
+ * point of the learning queue is that it fixes what is already indexed.
+ *
+ * Returns the TOTAL number of posts now attached to the product, not the number
+ * newly changed. Ehsan reads this number as "did that work?", and a truthful
+ * "0 newly linked" after the product name had already matched everything reads
+ * as failure.
  */
 export async function relinkPosts(productId) {
   const productAliases = await db.select().from(aliases)
@@ -129,15 +135,15 @@ export async function relinkPosts(productId) {
   if (needles.length === 0) return 0;
 
   const candidates = await db.select().from(posts).where(eq(posts.active, true)).all();
-  let linked = 0;
+  let attached = 0;
   for (const p of candidates) {
-    if (p.productId === productId) continue;
+    if (p.productId === productId) { attached += 1; continue; }
     if (needles.some((n) => p.searchText && p.searchText.includes(n))) {
       await db.update(posts).set({ productId }).where(eq(posts.id, p.id)).run();
-      linked += 1;
+      attached += 1;
     }
   }
-  return linked;
+  return attached;
 }
 
 // Age out old posts so the index never serves a price from last season.

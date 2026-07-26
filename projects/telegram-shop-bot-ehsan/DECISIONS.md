@@ -233,3 +233,55 @@ conversion, ambiguous multi-price captions, and caption sanitization). Worth rep
 before any future deploy — the platform has no test runner, and this class of bug is
 invisible until a real customer searches. Recorded in `bot/AGENTS.md` so it is not
 reintroduced.
+
+## 2026-07-26 — Telegram Serverless is NOT available; moved to Cloudflare Workers + D1
+The owner checked BotFather and there is no **Serverless** entry — not in the bot menu
+(API Token / Edit Bot / Bot Settings / Payments / Transfer Ownership / Delete Bot) and
+not in Bot Settings (Inline Mode … Configure Mini App / Paid Broadcast). The feature is
+documented and real, but not enabled for this account. I was wrong to keep suggesting it
+was a client-version problem after the owner had already shown the menu.
+
+Switched to the fallback identified at design time: **Cloudflare Workers + D1**, free
+tier, no credit card, and — unlike Vercel — no prohibition on commercial use.
+
+The port was cheap because the business logic never depended on the platform. All of
+`lib/` carried over unchanged apart from import paths; two small shims absorbed the rest:
+- `src/db.js` — a compatibility layer over Drizzle re-exposing `table`/`boolean`/`json`,
+  so `schema.js` and every query stayed as written.
+- `src/sdk.js` — `db` and `api` as `export let`, assigned per request by `init(env)`.
+  ES module live bindings mean no request context had to be threaded through the code.
+
+Three genuine API differences were fixed: `.returning().run()` → `.returning()` (in
+Drizzle, `returning()` is itself terminal), `db.$count` → a projected `count()`, and
+the D1 tables now need an explicit SQL migration alongside `schema.js`.
+
+Also added, because the platform demands it: the Worker **always answers HTTP 200**, even
+on error — a non-200 makes Telegram retry the same update indefinitely, which would
+replay orders and re-notify Ehsan — and the webhook must be registered with
+`allowed_updates` including `channel_post`, without which the bot never sees a product.
+
+## 2026-07-26 — SECURITY: bot token exposed in a screenshot
+The owner shared a screenshot with the full bot token visible. Flagged immediately and
+told them to revoke it via BotFather → API Token → Revoke. Not used, not stored, not
+echoed back. Recorded because the lesson is durable: the token is the whole bot, and it
+must never travel through chat, screenshots, or this repository.
+
+## 2026-07-26 — CORRECTION: Ehsan curates his own channel; newest wins, not cheapest
+The owner clarified that no other shop's channel is involved at all: **Ehsan arranges his
+own channel himself** — one post per product, with his own photos, names and prices. The
+earlier picture of forwarding from ten supplier channels and comparing their prices was
+a misunderstanding on my side that had survived three rounds.
+
+The consequence is not cosmetic. Ranking was "cheapest fresh offer", which is right when
+several shops compete and **wrong** for a single curated catalogue: when Ehsan re-posts a
+product at a higher price, the cheapest match is the superseded post, so the bot would
+have quoted an old low price and Ehsan would have eaten the difference on every raise.
+Changed to **newest post wins**, with unpriced posts sorting last.
+
+Removed as now meaningless: the runner-up "سایر مراجع" block in the order notification,
+its `alternatives` column, and `MAX_ALTERNATIVES`. Kept: the `supplier` column (populates
+harmlessly if he ever forwards) and caption sanitization (still the only thing stopping a
+pasted supplier caption from handing his customer their phone number).
+
+Grouping several posts under one product is still worth having — it is what makes a
+re-post supersede the previous price rather than appear as a second product.

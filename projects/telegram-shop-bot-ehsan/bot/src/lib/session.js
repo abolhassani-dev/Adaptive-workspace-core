@@ -1,7 +1,7 @@
-import { db } from 'sdk';
-import { eq } from 'sdk/db';
-import { sessions, settings } from 'schema';
-import { now } from 'lib/config';
+import { db } from '../sdk.js';
+import { eq } from '../db.js';
+import { sessions, settings } from '../schema.js';
+import { now } from './config.js';
 
 // Conversation state. States used:
 //   idle

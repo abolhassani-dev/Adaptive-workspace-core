@@ -1,5 +1,5 @@
-import { toPersianDigits } from 'lib/text';
-import { now, DAY } from 'lib/config';
+import { toPersianDigits } from './text.js';
+import { now, DAY } from './config.js';
 
 // Relative dates only — a raw timestamp tells Ehsan's customers nothing, while
 // "۳ روز پیش" tells them exactly how much to trust the price.

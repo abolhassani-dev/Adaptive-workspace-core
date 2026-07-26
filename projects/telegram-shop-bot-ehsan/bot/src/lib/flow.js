@@ -1,11 +1,11 @@
-import { db, api } from 'sdk';
-import { eq } from 'sdk/db';
-import { customers } from 'schema';
-import { searchProducts, recordUnmatched } from 'lib/search';
-import { sendProductCard, choiceKeyboard, mainMenu, contactRequestKeyboard } from 'lib/ui';
-import { getCart, cartText, cartKeyboard, submitOrder, notifyAdminUnmatched, isAdmin } from 'lib/cart';
-import { setSession, clearSession } from 'lib/session';
-import { toPersianDigits } from 'lib/text';
+import { db, api } from '../sdk.js';
+import { eq } from '../db.js';
+import { customers } from '../schema.js';
+import { searchProducts, recordUnmatched } from './search.js';
+import { sendProductCard, choiceKeyboard, mainMenu, contactRequestKeyboard } from './ui.js';
+import { getCart, cartText, cartKeyboard, submitOrder, notifyAdminUnmatched, isAdmin } from './cart.js';
+import { setSession, clearSession } from './session.js';
+import { toPersianDigits } from './text.js';
 
 export async function showHome(chatId, tgId, text = 'چه کاری برایتان انجام دهم؟') {
   await clearSession(tgId);

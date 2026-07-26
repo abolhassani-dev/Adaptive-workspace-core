@@ -99,20 +99,35 @@ export function sanitize(input) {
     if (hadContact && cleaned.length < 12) continue;
     kept.push(cleaned);
   }
-  return kept.join('\n').trim();
+  // Digits were folded to Latin so the phone/URL patterns could match. The
+  // customer must not see the result of that: fold them back, which also makes
+  // any Latin digits the supplier typed match the Persian digits used for
+  // prices and dates everywhere else on the card.
+  return toPersianDigits(kept.join('\n').trim());
 }
 
 // The product name: first line of the caption that reads like a name.
-export function extractTitle(caption) {
+export function extractTitle(caption, isPriceOnlyLine = () => false) {
   const clean = sanitize(caption);
   for (const line of clean.split('\n')) {
     const t = line.trim();
     if (t.length < 2) continue;
-    // A line that is only a price is not a name.
-    if (/^[\d\s.,٬٫]+(تومان|تومن|ت|ریال|ريال)?$/i.test(foldDigits(t))) continue;
+    if (isPriceOnlyLine(t)) continue;   // a price is not a name
     return t.length > 80 ? `${t.slice(0, 79)}…` : t;
   }
   return '';
+}
+
+/**
+ * Store phone numbers the way Ehsan will dial them. Telegram hands back
+ * "989123456789" with no plus; as-is that is neither tappable nor recognisable.
+ * Latin digits are deliberate — Telegram only turns a number into a tap-to-call
+ * link when it is written in Latin digits, and calling the customer IS the job.
+ */
+export function normalizePhone(raw) {
+  let d = foldDigits(String(raw || '')).replace(/[^\d+]/g, '').replace(/^\+/, '');
+  if (d.startsWith('98') && d.length === 12) d = `0${d.slice(2)}`;
+  return d;
 }
 
 export function truncate(s, max) {

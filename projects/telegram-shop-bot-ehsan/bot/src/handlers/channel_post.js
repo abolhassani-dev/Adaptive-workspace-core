@@ -1,4 +1,4 @@
-import { indexPost, pruneOldPosts } from 'lib/catalog';
+import { indexPost, pruneOldPosts } from '../lib/catalog.js';
 
 /**
  * Every post Ehsan forwards into his reference channel lands here. The bot is

@@ -1,0 +1,18 @@
+name = "ehsan-shop-bot"
+main = "src/index.js"
+compatibility_date = "2026-07-01"
+
+# Secrets are NOT set here — they would end up in git. Set them once with:
+#   npx wrangler secret put BOT_TOKEN
+#   npx wrangler secret put WEBHOOK_SECRET
+# See README.md.
+
+[[d1_databases]]
+binding = "DB"
+database_name = "ehsan-shop-bot"
+# Filled in by `npx wrangler d1 create ehsan-shop-bot` — paste the id it prints.
+database_id = "PASTE_DATABASE_ID_HERE"
+migrations_dir = "migrations"
+
+[observability]
+enabled = true

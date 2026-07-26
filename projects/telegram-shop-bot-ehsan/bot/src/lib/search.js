@@ -1,10 +1,17 @@
-import { db } from 'sdk';
-import { eq, and, gte, like, inArray } from 'sdk/db';
-import { posts, products, aliases, unmatched } from 'schema';
-import { normalize, tokenize } from 'lib/text';
-import { now, DAY, FRESHNESS_DAYS, POST_MAX_AGE_DAYS, MAX_RESULTS } from 'lib/config';
+import { db } from '../sdk.js';
+import { eq, and, gte, like, inArray } from '../db.js';
+import { posts, products, aliases, unmatched } from '../schema.js';
+import { normalize, tokenize } from './text.js';
+import { now, DAY, FRESHNESS_DAYS, POST_MAX_AGE_DAYS, MAX_RESULTS } from './config.js';
 
 export const isFresh = (postedAt) => now() - postedAt <= FRESHNESS_DAYS * DAY;
+
+// Most recently posted first; a post with no readable price sorts last so it is
+// still reachable when the newest post happens to omit the number.
+const newestFirst = (a, b) => {
+  if ((a.price === null) !== (b.price === null)) return a.price === null ? 1 : -1;
+  return b.postedAt - a.postedAt;
+};
 
 // Which canonical products does this query name? This is the layer that lets a
 // customer type «کاسه ۸.۵» and reach posts that only ever say «قالب کیک یزدی».
@@ -80,18 +87,12 @@ export async function searchProducts(rawQuery) {
   for (const g of groups.values()) {
     // Cheapest first, but only among priced offers; unpriced ones sort last so
     // they are still reachable when nobody published a number.
-    g.offers.sort((a, b) => {
-      if (a.price === null && b.price === null) return b.postedAt - a.postedAt;
-      if (a.price === null) return 1;
-      if (b.price === null) return -1;
-      if (a.price !== b.price) return a.price - b.price;
-      return b.postedAt - a.postedAt;
-    });
+    g.offers.sort(newestFirst);
 
-    // Prefer the cheapest offer whose price is still trustworthy.
-    g.best = g.offers.find((o) => o.price !== null && isFresh(o.postedAt))
-      || g.offers.find((o) => o.price !== null)
-      || g.offers[0];
+    // Newest wins, not cheapest. The channel is Ehsan's own catalogue, so a
+    // later post for the same product IS the current price — including when he
+    // raises it. Picking the cheapest would quote a superseded price back at him.
+    g.best = g.offers.find((o) => o.price !== null) || g.offers[0];
 
     const linked = g.key.startsWith('p:') ? productNames.get(g.best.productId) : null;
     if (linked) {
@@ -109,7 +110,8 @@ export async function searchProducts(rawQuery) {
     if (aExact !== bExact) return aExact - bExact;
     const aFresh = a.best?.price !== null && isFresh(a.best?.postedAt) ? 0 : 1;
     const bFresh = b.best?.price !== null && isFresh(b.best?.postedAt) ? 0 : 1;
-    return aFresh - bFresh;
+    if (aFresh !== bFresh) return aFresh - bFresh;
+    return (b.best?.postedAt || 0) - (a.best?.postedAt || 0);
   });
 
   return result.slice(0, MAX_RESULTS);
@@ -136,13 +138,7 @@ export async function getGroupForPost(postId) {
         .filter((p) => p.title && normalize(p.title) === normalize(post.title));
 
   const offers = siblings.length > 0 ? siblings : [post];
-  offers.sort((a, b) => {
-    if (a.price === null && b.price === null) return b.postedAt - a.postedAt;
-    if (a.price === null) return 1;
-    if (b.price === null) return -1;
-    if (a.price !== b.price) return a.price - b.price;
-    return b.postedAt - a.postedAt;
-  });
+  offers.sort(newestFirst);
 
   let title = post.title;
   let pinnedPhotoId;

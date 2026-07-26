@@ -1,3 +1,5 @@
-# CLI credentials — the Serverless access token lives here. Never commit.
-.tgcloud/
+# Secrets and local machine state — never commit.
+.dev.vars
+.wrangler/
 node_modules/
+wrangler.local.toml

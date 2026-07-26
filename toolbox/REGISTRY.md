@@ -144,17 +144,21 @@ Entry format:
 - What: serverless edge compute plus serverless SQL; bot runs as a webhook handler
 - Source: https://developers.cloudflare.com · https://grammy.dev/hosting/cloudflare-workers (official)
 - Gap it addressed: running a Telegram bot 24/7 at zero cost, with no server to maintain
-- Verdict: fallback only — superseded by Telegram Serverless (2026-07-26)
+- Verdict: **adopted** (2026-07-26)
 - Why: a channel-admin bot receives updates by **webhook**, so it needs no always-on process —
   which is what makes a free serverless tier a genuine fit rather than a compromise. Free tier
   is 100k requests/day with no credit card. Storing Telegram `file_id` instead of images keeps
   storage near zero. Caveats to state plainly to any owner: a free tier carries no service
   guarantee and its limits can change, so identify a paid fallback before depending on it.
 - Access it needs: a Cloudflare account; bot token stored as a secret/env var, never in a repo
-- Used in: telegram-shop-bot-ehsan (kept as the same-shape fallback, not adopted)
-- History: 2026-07-26 — surfaced answering a zero-cost hosting requirement; same day demoted to
-  fallback when Telegram Serverless turned out to exist. Still the right answer when a bot needs
-  npm packages, file-byte handling, or published quotas — none of which Telegram Serverless offers
+- Used in: telegram-shop-bot-ehsan
+- History: 2026-07-26 — surfaced answering a zero-cost hosting requirement, demoted to fallback
+  when Telegram Serverless turned out to exist, then adopted when Serverless proved unavailable
+  for the account. Practical notes from the port: `wrangler deploy --dry-run` and
+  `wrangler dev --local` both work with **no Cloudflare account**, so a Worker can be built and
+  fully exercised before the user ever signs up; D1 needs hand-written SQL migrations alongside
+  the ORM schema; and the webhook handler must always answer HTTP 200 or Telegram retries the
+  same update forever.
 
 ## Telegram Serverless (official)
 - What: runs a bot's backend JavaScript on Telegram's own infrastructure — isolated V8 sandbox
@@ -162,9 +166,12 @@ Entry format:
   deployed via `npx tgcloud push`, migrated via `npx tgcloud migrate`
 - Source: https://core.telegram.org/bots/serverless (official)
 - Gap it addressed: hosting a Telegram bot 24/7 at genuinely zero cost, with no server to run
-- Verdict: adopted (2026-07-26)
-- Why: official and first-party — no third-party account, no credit card, no VPS, and the
-  database comes with it instead of being a second service to bolt on. For a bot whose owner
+- Verdict: **unavailable in practice** (2026-07-26)
+- Why: **check BotFather before promising it.** For this owner's account there was no
+  Serverless entry at all — not in the bot menu, not in Bot Settings — so the feature could
+  not be used no matter how well it fit. On paper it is excellent: official and first-party,
+  no third-party account, no credit card, no VPS, and the database comes with it instead of
+  being a second service to bolt on. For a bot whose owner
   will not pay anything, this beats every free tier because there is no free tier to age out of.
   **Check its two constraints against the design before adopting**: no npm packages (official
   SDK and your own modules only), and file bytes cannot be uploaded or downloaded from a handler
@@ -172,10 +179,13 @@ Entry format:
   Telegram publishes **no quotas or limits** — confirm on a real deployment before depending on
   it, and keep a same-shape fallback (Cloudflare Workers + D1) identified in advance.
 - Access it needs: the bot's own token; nothing else
-- Used in: telegram-shop-bot-ehsan
+- Used in: telegram-shop-bot-ehsan (attempted, then abandoned for Cloudflare)
 - History: 2026-07-26 — found only after the owner pushed back on a wrong "Telegram doesn't host
-  bot code" answer. Lesson worth keeping: this platform is new enough that general search and
-  model recall both miss it — read core.telegram.org directly before answering hosting questions
+  bot code" answer; then found to be unavailable for their account. Two lessons: the platform is
+  new enough that general search and model recall both miss it, so read core.telegram.org
+  directly — and availability is per-account, so have the user confirm the BotFather entry
+  exists before designing around it. `npx tgcloud init` scaffolds with no credentials, which is
+  a free way to read the real SDK docs regardless.
 
 ## Vercel free (Hobby) tier as Telegram bot hosting
 - What: serverless functions on Vercel's free plan
@@ -189,3 +199,20 @@ Entry format:
 - Access it needs: a Vercel account, plus a separate database provider
 - Used in: —
 - History: 2026-07-26 — evaluated for telegram-shop-bot-ehsan
+
+## Drizzle ORM (with Cloudflare D1)
+- What: TypeScript/JS SQL query builder and schema DSL; `drizzle-orm/d1` binds it to Cloudflare D1
+- Source: https://orm.drizzle.team (open source, actively maintained)
+- Gap it addressed: a data layer for a bot moved off a platform whose built-in database had a
+  near-identical API
+- Verdict: adopted (2026-07-26)
+- Why: the previous platform's database DSL was Drizzle-shaped, so a ~30-line compatibility
+  module (re-exposing `table`/`boolean`/`json` and the operators) let an entire project's
+  queries move hosts unchanged. Worth remembering as a porting tactic: when two platforms have
+  similar-but-not-identical APIs, a shim at the boundary beats rewriting the call sites.
+- Differences that bit during the port: `.returning()` is itself terminal (no `.run()` after it),
+  `db.$count` is version-dependent so a projected `count()` is safer, and Drizzle does **not**
+  create tables — D1 needs its own SQL migration kept in step with the schema.
+- Access it needs: none beyond the D1 binding
+- Used in: telegram-shop-bot-ehsan
+- History: 2026-07-26 — adopted during the move to Cloudflare Workers

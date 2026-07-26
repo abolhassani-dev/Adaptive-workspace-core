@@ -6,16 +6,18 @@ stock. Other shops publish daily product+price lists in their own Telegram chann
 sells their goods to his own customers and earns his margin as commission on the supplier's
 invoice.
 
-Ehsan forwards those shops' posts into **his own Telegram channel**, where his bot is admin.
-That channel is the reference: whatever is in it can be quoted to customers.
+Ehsan curates **his own Telegram channel** as his catalogue — one post per product, with
+his photos, names and prices — and his bot is admin there. That channel is the reference:
+whatever is in it can be quoted to customers, and re-posting an item is how he changes its
+price.
 
 He wants a Telegram bot to hand to his customers that acts as his storefront:
 1. Customer taps «استعلام کالا» and types a product name in their own words.
 2. The bot searches the indexed posts, finds the product, and shows a standardized card —
-   photo(s), cheapest fresh price, date, description — with the source hidden.
+   photo(s), the price from the newest post, its date, and a sanitized description.
 3. Customer adds items to a cart and submits a preliminary order (name, phone).
 4. Ehsan gets one Telegram notification per order: which customer, what items and quantities,
-   which supplier and price for each, plus the runner-ups, each linked to the original post.
+   the price for each, and a link to the post — with the customer's phone tappable to call.
 5. Ehsan then phones the supplier to confirm stock/price, then phones his customer and
    closes the deal manually. **The bot stops at lead generation** — no payment, no logistics.
 
@@ -81,12 +83,10 @@ ranking sources was ceremony.
   Bot API suffices; `forward_origin` even identifies the source supplier automatically. The
   MTProto reader, its dedicated phone number and its account risk are all gone.
   See DECISIONS 2026-07-26.
-- **Hosting at zero cost** — **resolved: Telegram Serverless**, official, runs bot code on
-  Telegram's own infrastructure with a built-in SQLite database. No server, no third-party
-  account, no credit card. Its two constraints (no npm packages; no file-byte upload/download)
-  do not affect this design. Remaining unknown: Telegram publishes no quotas, so limits must be
-  confirmed on a real deployment before launch. Fallback of the same shape: Cloudflare Workers
-  + D1. See DECISIONS 2026-07-26 (correction).
+- **Hosting at zero cost** — **resolved: Cloudflare Workers + D1** free tier. Telegram
+  Serverless was preferred but is not available for this account (owner checked BotFather).
+  Free tier allows commercial use and needs no credit card; the bot is webhook-driven so
+  nothing idles. See DECISIONS 2026-07-26.
 - **Persian product-name matching** — no external tool needed. Normalization (Arabic/Persian
   character folding, digit folding, ZWNJ) + Ehsan-curated aliases + an unmatched-search
   learning queue. Built-in capability, no dependency.
@@ -94,11 +94,11 @@ ranking sources was ceremony.
   must resolve to "no price" rather than a guess.
 
 ## Toolbox (this project)
-- **Telegram Serverless** — host for the bot's code and database. Role: runs everything;
-  removes the server, the hosting account and the cost entirely. Access: the bot's own token;
-  no third-party account. Chosen because it is official, free, and its two constraints (no npm
-  packages, no file-byte handling) do not touch this design. Quotas unpublished — confirm on a
-  real deployment before launch. Fallback: Cloudflare Workers + D1.
+- **Cloudflare Workers + D1** — host for the bot's code and database. Role: runs everything;
+  free tier, no credit card, commercial use permitted. Access: a Cloudflare account; the bot
+  token and webhook secret are stored as Worker secrets, never in this repo.
+- **Drizzle ORM** — the query layer over D1. Adopted because it let the entire existing data
+  layer carry over behind a thin compatibility shim instead of being rewritten.
 
 ## Open questions
 Answered at intake round 2: channels are handled by Ehsan forwarding into his own channel;
@@ -109,6 +109,10 @@ Answered at intake round 3: Ehsan's own channel is the reference so forwarding r
 do not matter; one product per post, but possibly several photos; hosting must cost nothing
 and be stable; the customer flow ends in a cart.
 
+Answered at round 4: Ehsan curates his own channel; there is no forwarding from other
+shops and no cross-shop price comparison.
+
 Still open:
 - Target launch date, and roughly how many customers will use it at first.
-- Actual Telegram Serverless quotas — answerable only by deploying, not by asking.
+- How Ehsan actually writes captions — needed to tune price parsing and the freshness
+  window. Answerable only by looking at real posts.

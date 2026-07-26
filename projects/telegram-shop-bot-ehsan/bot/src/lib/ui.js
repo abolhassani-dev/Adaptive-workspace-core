@@ -1,8 +1,8 @@
-import { api } from 'sdk';
-import { formatPrice, formatPriceShort } from 'lib/price';
-import { relativeDate } from 'lib/dates';
-import { truncate } from 'lib/text';
-import { isFresh } from 'lib/search';
+import { api } from '../sdk.js';
+import { formatPrice, formatPriceShort } from './price.js';
+import { relativeDate } from './dates.js';
+import { truncate } from './text.js';
+import { isFresh } from './search.js';
 
 // No parse_mode anywhere in this bot. Supplier captions and customer names are
 // arbitrary text; feeding them through a Markdown or HTML parser turns a stray

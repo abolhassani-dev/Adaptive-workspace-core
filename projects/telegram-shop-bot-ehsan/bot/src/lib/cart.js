@@ -1,13 +1,13 @@
-import { db, api } from 'sdk';
-import { eq, and, desc } from 'sdk/db';
-import { cartItems, orders, orderItems, customers } from 'schema';
-import { getGroupForPost, isFresh } from 'lib/search';
-import { formatPrice, formatPriceShort } from 'lib/price';
-import { relativeDate } from 'lib/dates';
-import { postLink } from 'lib/ui';
-import { toPersianDigits, truncate } from 'lib/text';
-import { MAX_ALTERNATIVES, now } from 'lib/config';
-import { getSetting } from 'lib/session';
+import { db, api } from '../sdk.js';
+import { eq, and, desc } from '../db.js';
+import { cartItems, orders, orderItems, customers } from '../schema.js';
+import { getGroupForPost, isFresh } from './search.js';
+import { formatPrice, formatPriceShort } from './price.js';
+import { relativeDate } from './dates.js';
+import { postLink } from './ui.js';
+import { toPersianDigits, truncate } from './text.js';
+import { now } from './config.js';
+import { getSetting } from './session.js';
 
 export const ADMIN_KEY = 'admin_tg_id';
 
@@ -94,17 +94,6 @@ export function cartKeyboard(items) {
   return { inline_keyboard: rows };
 }
 
-// Runner-up suppliers for one line, so Ehsan can switch shops without searching.
-async function alternativesFor(postId) {
-  const group = await getGroupForPost(postId);
-  if (!group) return '';
-  return group.offers
-    .filter((o) => o.id !== postId && o.price !== null)
-    .slice(0, MAX_ALTERNATIVES)
-    .map((o) => `${o.supplier || 'نامشخص'} ${formatPriceShort(o.price)} (${relativeDate(o.postedAt)})`)
-    .join(' · ');
-}
-
 /**
  * Turn the cart into an order and tell Ehsan. Prices are snapshotted onto the
  * order lines: the index keeps moving as new posts arrive, and an order has to
@@ -122,15 +111,14 @@ export async function submitOrder(tgId, customer) {
     status: 'new',
     total,
     createdAt: now(),
-  }).returning().run();
+  }).returning();
 
-  const order = Array.isArray(inserted) ? inserted[0] : inserted;
+  const order = inserted[0];
 
   const detailed = [];
   for (const item of items) {
     const group = item.postId ? await getGroupForPost(item.postId) : null;
     const post = group?.best || null;
-    const alternatives = item.postId ? await alternativesFor(item.postId) : '';
 
     await db.insert(orderItems).values({
       orderId: order.id,
@@ -140,10 +128,9 @@ export async function submitOrder(tgId, customer) {
       supplier: post?.supplier || null,
       postMessageId: post?.messageId || null,
       postedAt: post?.postedAt || null,
-      alternatives,
     }).run();
 
-    detailed.push({ item, post, alternatives });
+    detailed.push({ item, post });
   }
 
   await clearCart(tgId);
@@ -154,11 +141,11 @@ export async function submitOrder(tgId, customer) {
 function orderText(order, detailed) {
   const lines = [
     `🔔 سفارش جدید #${toPersianDigits(order.id)}`,
-    `👤 ${order.customerName || '—'} — ${toPersianDigits(order.customerPhone || '—')}`,
+    `👤 ${order.customerName || '—'} — ${order.customerPhone || '—'}`,
     '',
   ];
 
-  detailed.forEach(({ item, post, alternatives }, idx) => {
+  detailed.forEach(({ item, post }, idx) => {
     lines.push(`${toPersianDigits(idx + 1)}. ${item.title} — ${toPersianDigits(item.qty)} عدد`);
     if (item.unitPrice !== null && item.unitPrice !== undefined) {
       const supplier = post?.supplier ? ` — ${post.supplier}` : '';
@@ -168,7 +155,6 @@ function orderText(order, detailed) {
     } else {
       lines.push('   💰 نیاز به استعلام');
     }
-    if (alternatives) lines.push(`   سایر: ${alternatives}`);
   });
 
   if (order.total !== null && order.total !== undefined) {
@@ -214,7 +200,7 @@ export async function notifyAdminUnmatched(phrase, tgId) {
   if (!adminId) return;
   const customer = await db.select().from(customers).where(eq(customers.tgId, tgId)).get();
   const who = customer?.name
-    ? `${customer.name} — ${toPersianDigits(customer.phone || '')}`
+    ? `${customer.name} — ${customer.phone || ''}`
     : 'مشتری (هنوز مشخصات ثبت نکرده)';
   await api.sendMessage({
     chat_id: adminId,

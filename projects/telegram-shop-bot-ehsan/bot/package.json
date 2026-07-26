@@ -4,8 +4,16 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "deploy": "tgcloud push",
-    "status": "tgcloud status",
-    "run": "tgcloud run"
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:create": "wrangler d1 create ehsan-shop-bot",
+    "db:migrate": "wrangler d1 migrations apply ehsan-shop-bot --remote",
+    "logs": "wrangler tail"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.44.6"
+  },
+  "devDependencies": {
+    "wrangler": "^4.42.0"
   }
 }
