@@ -9,6 +9,7 @@ import { showHome, askForSearch, showCart, startCheckout, ensurePhone, showMyOrd
 import {
   sendAdminMenu, unmatchedList, unmatchedActions, resolveUnmatched,
   ordersSummary, createProduct, addAlias, reportView, peopleView,
+  resetMenu, confirmReset, runReset,
 } from '../lib/admin.js';
 import { showScreen } from '../lib/screen.js';
 import { toPersianDigits } from '../lib/text.js';
@@ -152,6 +153,32 @@ export default async function (cb) {
       await ack();
       const view = await ordersSummary();
       await showScreen(chatId, tgId, view);
+      return;
+    }
+
+    if (data === 'adm:reset') {
+      await ack();
+      await showScreen(chatId, tgId, await resetMenu());
+      return;
+    }
+
+    if (data === 'rst:posts' || data === 'rst:all') {
+      await ack();
+      await showScreen(chatId, tgId, confirmReset(data.slice(4)));
+      return;
+    }
+
+    if (data === 'rst:posts:yes' || data === 'rst:all:yes') {
+      const kind = data.split(':')[1];
+      const removed = await runReset(kind, tgId);
+      await ack('پاک شد');
+      await sendAdminMenu(
+        chatId,
+        kind === 'all'
+          ? `♻️ ریست کامل انجام شد. ${toPersianDigits(removed)} پست پاک شد.`
+          : `🗑 ${toPersianDigits(removed)} پست از حافظه پاک شد.`,
+        tgId,
+      );
       return;
     }
 

@@ -27,6 +27,10 @@ missing feature was ruled out on purpose.
 - `allowed_updates` must include `channel_post` when registering the webhook, or the
   bot never sees a single product.
 - Images are never stored or fetched — only Telegram `file_id` strings are passed around.
+- **Telegram never reports a deleted channel post.** Only new posts arrive, so the index
+  cannot notice a removal and a product taken down would keep being offered. The
+  **🧹 پاک‌سازی حافظه** panel section is the only way to take something out — do not remove
+  it, and do not assume the index reflects the channel's current contents.
 
 ## Invariants — do not break these
 

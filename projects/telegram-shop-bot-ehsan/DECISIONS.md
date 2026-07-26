@@ -424,3 +424,20 @@ throws — a failed log must not cost a customer their search.
 Windows are rolling (last 24h / 7d / 30d) rather than calendar days, and labelled «گذشته» to
 match. A calendar "today" needs a timezone, and getting that wrong reports the wrong day
 silently.
+
+## 2026-07-26 — Deleted channel posts stay in the index; cleanup added to the panel
+The owner emptied the channel and the bot still reported «۳ پست فعال». Not a bug in the bot:
+**Telegram sends a bot nothing when a channel post is deleted.** Only new posts arrive, so the
+index cannot notice a removal, and the Bot API cannot read channel history to re-sync either.
+
+Answered where Ehsan can reach it rather than in a database console he cannot use — a
+**🧹 پاک‌سازی حافظه** section with two options behind a confirmation screen:
+- *پاک کردن محصولات* — clears indexed posts, leaves customers, orders and aliases alone
+- *ریست کامل* — clears everything for a clean test run, **keeping the admin** (the `settings`
+  row holding his id is never touched, and his own session survives so the panel he is looking
+  at does not break under him)
+
+This matters beyond testing: it is the only way to withdraw a product Ehsan has stopped
+selling. Recorded as a known gap that per-product removal does not exist yet — today it is all
+products or nothing, which is fine while the catalogue is being built and not fine once he is
+dropping individual items.

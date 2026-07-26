@@ -1,6 +1,9 @@
 import { db } from '../sdk.js';
-import { eq, and, desc, like, count, gte, inArray } from '../db.js';
-import { products, aliases, unmatched, posts, events, customers, orders } from '../schema.js';
+import { eq, ne, and, desc, like, count, gte, inArray } from '../db.js';
+import {
+  products, aliases, unmatched, posts, events, customers, orders, orderItems,
+  cartItems, sessions,
+} from '../schema.js';
 import { showScreen } from './screen.js';
 import { now, DAY } from './config.js';
 import { normalize, toPersianDigits, truncate } from './text.js';
@@ -15,8 +18,90 @@ export const adminMenu = () => ({
     [{ text: '📥 جستجوهای بی‌نتیجه', callback_data: 'adm:unmatched' }],
     [{ text: '📈 گزارش مشتری‌ها', callback_data: 'rep:1' }],
     [{ text: '📊 سفارش‌ها', callback_data: 'adm:orders' }],
+    [{ text: '🧹 پاک‌سازی حافظه', callback_data: 'adm:reset' }],
   ],
 });
+
+/**
+ * Cleanup, because **Telegram never tells a bot that a channel post was deleted.**
+ * Only new posts arrive, so the index cannot notice a removal on its own and a
+ * product Ehsan took down would keep being offered. This is the only way to take
+ * something out of the bot's memory, so it lives in the panel rather than in a
+ * database console he cannot use.
+ */
+export async function resetMenu() {
+  const counted = await db.select({ n: count() }).from(posts).get();
+  return {
+    text: [
+      '🧹 پاک‌سازی حافظه',
+      '',
+      `الان ${toPersianDigits(counted?.n ?? 0)} پست در حافظه‌ی بات است.`,
+      '',
+      'تلگرام حذف شدن پست‌های کانال را به بات خبر نمی‌دهد، پس اگر پستی را از کانال',
+      'پاک کردید، از این‌جا حافظه را هم پاک کنید و دوباره پست بگذارید.',
+    ].join('\n'),
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: '🗑 پاک کردن محصولات', callback_data: 'rst:posts' }],
+        [{ text: '♻️ ریست کامل (برای تست)', callback_data: 'rst:all' }],
+        [{ text: '↩️ بازگشت', callback_data: 'adm:menu' }],
+      ],
+    },
+  };
+}
+
+export function confirmReset(kind) {
+  const what = kind === 'all'
+    ? [
+        '♻️ ریست کامل',
+        '',
+        'همه‌ی این‌ها پاک می‌شوند:',
+        '· محصولات و پست‌ها',
+        '· اسم‌های تعریف‌شده',
+        '· مشتری‌ها و شماره‌هایشان',
+        '· سفارش‌ها و سبدهای خرید',
+        '· گزارش‌ها و جستجوهای بی‌نتیجه',
+        '',
+        'مدیر بودن شما باقی می‌ماند. این کار برگشت‌پذیر نیست.',
+      ]
+    : [
+        '🗑 پاک کردن محصولات',
+        '',
+        'همه‌ی پست‌های کانال از حافظه‌ی بات پاک می‌شوند.',
+        'مشتری‌ها، سفارش‌ها و اسم‌های تعریف‌شده دست نمی‌خورند.',
+        '',
+        'این کار برگشت‌پذیر نیست.',
+      ];
+  return {
+    text: what.join('\n'),
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: '✅ بله، پاک کن', callback_data: `rst:${kind}:yes` }],
+        [{ text: '↩️ انصراف', callback_data: 'adm:reset' }],
+      ],
+    },
+  };
+}
+
+export async function runReset(kind, adminTgId) {
+  const before = await db.select({ n: count() }).from(posts).get();
+  await db.delete(posts).run();
+
+  if (kind === 'all') {
+    await db.delete(products).run();
+    await db.delete(aliases).run();
+    await db.delete(unmatched).run();
+    await db.delete(cartItems).run();
+    await db.delete(orderItems).run();
+    await db.delete(orders).run();
+    await db.delete(events).run();
+    await db.delete(customers).run();
+    // Keep the admin's own session so the panel he is looking at survives; the
+    // `settings` row holding his id is never touched, so he stays admin.
+    await db.delete(sessions).where(ne(sessions.tgId, adminTgId)).run();
+  }
+  return before?.n ?? 0;
+}
 
 export async function createProduct(name) {
   const inserted = await db.insert(products)

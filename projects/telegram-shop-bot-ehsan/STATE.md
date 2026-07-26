@@ -96,8 +96,18 @@ is migrated by hand, so a deploy alone will not create the new columns and table
   is the first thing to revisit.
 - Token and webhook secret rotation — exposed in screenshots during setup.
 
+## Live findings, round 2 (2026-07-26)
+- **Not a bug, a platform limit:** deleting a channel post leaves it in the index. Telegram
+  sends bots nothing when a post is deleted — only new posts arrive — so the bot has no way
+  to notice. Answered with a **🧹 پاک‌سازی حافظه** section in the panel: clear the products,
+  or a full reset for testing (which keeps the admin). Reported by the owner after emptying
+  the channel and still seeing "۳ پست فعال".
+
 ## Known gaps (deliberate)
 - Editing a channel post does not update the index (`edited_channel_post` unhandled);
   re-posting is the documented way to change a price, and is written into POSTING-GUIDE.md
 - Multi-item orders work, but there is no way for a customer to change a quantity after
   adding — only remove the line and add it again
+- No per-product removal yet: taking one item out of the index means clearing all products
+  and re-posting. Worth adding once Ehsan is running a real catalogue and drops items
+  individually.
