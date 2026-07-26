@@ -102,12 +102,14 @@ is migrated by hand, so a deploy alone will not create the new columns and table
   to notice. Answered with a **🧹 پاک‌سازی حافظه** section in the panel: clear the products,
   or a full reset for testing (which keeps the admin). Reported by the owner after emptying
   the channel and still seeing "۳ پست فعال".
+- **🗑 حذف یک محصول** added: Ehsan types a name and every post of that product leaves the
+  index. It deletes the whole offer group, not the tapped post — a product re-posted three
+  times has three rows, and removing only the newest would resurrect the previous price.
 
 ## Known gaps (deliberate)
 - Editing a channel post does not update the index (`edited_channel_post` unhandled);
   re-posting is the documented way to change a price, and is written into POSTING-GUIDE.md
 - Multi-item orders work, but there is no way for a customer to change a quantity after
   adding — only remove the line and add it again
-- No per-product removal yet: taking one item out of the index means clearing all products
-  and re-posting. Worth adding once Ehsan is running a real catalogue and drops items
-  individually.
+- Removing a product removes it from the bot's memory only; the channel post itself stays
+  and must be deleted separately if wanted.

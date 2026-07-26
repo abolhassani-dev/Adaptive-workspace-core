@@ -441,3 +441,20 @@ This matters beyond testing: it is the only way to withdraw a product Ehsan has 
 selling. Recorded as a known gap that per-product removal does not exist yet — today it is all
 products or nothing, which is fine while the catalogue is being built and not fine once he is
 dropping individual items.
+
+## 2026-07-26 — Per-product removal added
+Closes the gap logged with the cleanup feature: withdrawing one item no longer means clearing
+the whole catalogue. Ehsan types the product name, picks from the matches, confirms, and every
+post of that product leaves the index.
+
+**It deletes the whole offer group, not the post that was tapped.** A product re-posted three
+times has three rows, so removing only the newest would resurrect the previous price the next
+time a customer searched — the same class of bug as the superseded-post ranking bug earlier
+today. Verified: two posts of one product both removed, an unrelated product untouched.
+
+Aliases and the product row are deliberately kept. They cost nothing with no posts attached,
+and if Ehsan lists the item again later the names he taught the bot still work.
+
+Channel posts themselves are untouched and the confirmation screen says so — the bot has no
+business deleting from his channel, and he may want the post to stay while the product is off
+the shop.

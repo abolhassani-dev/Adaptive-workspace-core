@@ -18,6 +18,7 @@ export const adminMenu = () => ({
     [{ text: '📥 جستجوهای بی‌نتیجه', callback_data: 'adm:unmatched' }],
     [{ text: '📈 گزارش مشتری‌ها', callback_data: 'rep:1' }],
     [{ text: '📊 سفارش‌ها', callback_data: 'adm:orders' }],
+    [{ text: '🗑 حذف یک محصول', callback_data: 'adm:delprod' }],
     [{ text: '🧹 پاک‌سازی حافظه', callback_data: 'adm:reset' }],
   ],
 });
@@ -29,6 +30,70 @@ export const adminMenu = () => ({
  * something out of the bot's memory, so it lives in the panel rather than in a
  * database console he cannot use.
  */
+/**
+ * Removing one product. Needed because Telegram never reports a deleted channel
+ * post, so a product Ehsan stops selling would otherwise keep being offered and
+ * the only remedy was clearing the whole catalogue.
+ *
+ * Deletion works on the whole offer group, not the single post that was tapped:
+ * a product Ehsan re-posted three times has three rows, and removing only the
+ * newest would resurrect the previous price the next time a customer searched.
+ */
+export function deleteProductPrompt() {
+  return {
+    text: [
+      '🗑 حذف یک محصول',
+      '',
+      'نام محصولی که می‌خواهید از حافظه‌ی بات برداشته شود را بنویسید:',
+      '',
+      'همه‌ی پست‌های آن محصول پاک می‌شوند، وگرنه پست قدیمی‌ترش دوباره ظاهر می‌شود.',
+      'اسم‌های تعریف‌شده باقی می‌مانند تا اگر بعداً دوباره پستش گذاشتید کار کنند.',
+    ].join('\n'),
+    reply_markup: { inline_keyboard: [[{ text: '↩️ بازگشت', callback_data: 'adm:menu' }]] },
+  };
+}
+
+export function deleteCandidates(groups) {
+  return {
+    text: 'کدام را حذف کنم؟',
+    reply_markup: {
+      inline_keyboard: [
+        ...groups.map((g) => [{
+          text: truncate(`${g.title} (${toPersianDigits(g.offers.length)} پست)`, 60),
+          callback_data: `dp:${g.best.id}`,
+        }]),
+        [{ text: '↩️ بازگشت', callback_data: 'adm:menu' }],
+      ],
+    },
+  };
+}
+
+export function confirmDelete(group) {
+  return {
+    text: [
+      `🗑 حذف «${group.title}»`,
+      '',
+      `${toPersianDigits(group.offers.length)} پست این محصول از حافظه‌ی بات پاک می‌شود.`,
+      'پست‌های خود کانال دست نمی‌خورند — اگر آن‌ها را هم نمی‌خواهید، جداگانه پاکشان کنید.',
+      '',
+      'این کار برگشت‌پذیر نیست.',
+    ].join('\n'),
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: '✅ بله، حذف کن', callback_data: `dpy:${group.best.id}` }],
+        [{ text: '↩️ انصراف', callback_data: 'adm:menu' }],
+      ],
+    },
+  };
+}
+
+export async function deleteGroup(group) {
+  const ids = group.offers.map((o) => o.id);
+  if (ids.length === 0) return 0;
+  await db.delete(posts).where(inArray(posts.id, ids)).run();
+  return ids.length;
+}
+
 export async function resetMenu() {
   const counted = await db.select({ n: count() }).from(posts).get();
   return {

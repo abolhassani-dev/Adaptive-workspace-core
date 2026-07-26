@@ -10,6 +10,7 @@ import {
   sendAdminMenu, unmatchedList, unmatchedActions, resolveUnmatched,
   ordersSummary, createProduct, addAlias, reportView, peopleView,
   resetMenu, confirmReset, runReset,
+  deleteProductPrompt, confirmDelete, deleteGroup,
 } from '../lib/admin.js';
 import { showScreen } from '../lib/screen.js';
 import { toPersianDigits } from '../lib/text.js';
@@ -153,6 +154,32 @@ export default async function (cb) {
       await ack();
       const view = await ordersSummary();
       await showScreen(chatId, tgId, view);
+      return;
+    }
+
+    if (data === 'adm:delprod') {
+      await ack();
+      await setSession(tgId, 'admin_delete_search');
+      await showScreen(chatId, tgId, deleteProductPrompt());
+      return;
+    }
+
+    if (data.startsWith('dp:')) {
+      await ack();
+      const group = await getGroupForPost(Number(data.slice(3)));
+      if (!group) { await sendAdminMenu(chatId, 'این محصول دیگر در حافظه نیست.', tgId); return; }
+      await showScreen(chatId, tgId, confirmDelete(group));
+      return;
+    }
+
+    if (data.startsWith('dpy:')) {
+      const group = await getGroupForPost(Number(data.slice(4)));
+      if (!group) { await ack(); await sendAdminMenu(chatId, 'این محصول دیگر در حافظه نیست.', tgId); return; }
+      const title = group.title;
+      const removed = await deleteGroup(group);
+      await clearSession(tgId);
+      await ack('حذف شد');
+      await sendAdminMenu(chatId, `🗑 «${title}» حذف شد (${toPersianDigits(removed)} پست).`, tgId);
       return;
     }
 

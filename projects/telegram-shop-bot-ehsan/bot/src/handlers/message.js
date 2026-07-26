@@ -6,7 +6,10 @@ import {
   askForSearch, runSearch, showCart, startCheckout, showMyOrders,
   askForPhone, finishOrder, saveCustomer, ensurePhone, welcome,
 } from '../lib/flow.js';
-import { sendAdminMenu, createProduct, addAlias, findProducts } from '../lib/admin.js';
+import {
+  sendAdminMenu, createProduct, addAlias, findProducts, deleteCandidates,
+} from '../lib/admin.js';
+import { searchProducts } from '../lib/search.js';
 import { foldDigits, toPersianDigits, truncate, normalizePhone } from '../lib/text.js';
 import { showScreen } from '../lib/screen.js';
 
@@ -176,6 +179,20 @@ export default async function (message) {
       await showScreen(chatId, tgId, {
         text: `➕ «${text}» به‌عنوان اسم دیگرِ «${data.name}» ثبت شد.\nالان ${toPersianDigits(linked)} پست به این کالا وصل است.\n\nاسم بعدی را بفرستید یا /done را بزنید.`,
       });
+      return;
+    }
+
+    case 'admin_delete_search': {
+      if (!admin) { await clearSession(tgId); return; }
+      const groups = await searchProducts(text);
+      if (groups.length === 0) {
+        await showScreen(chatId, tgId, {
+          text: `محصولی با نام «${text}» در حافظه‌ی بات نبود. نام دیگری بنویسید.`,
+          reply_markup: { inline_keyboard: [[{ text: '↩️ بازگشت', callback_data: 'adm:menu' }]] },
+        });
+        return;
+      }
+      await showScreen(chatId, tgId, deleteCandidates(groups));
       return;
     }
 
