@@ -76,3 +76,42 @@ Entry format:
 - Access it needs: full account credentials (that's the problem)
 - Used in: —
 - History: 2026-07-24 — category ruled out during instagram-growth intake
+
+## Telethon (Python MTProto client)
+- What: long-standing Python library for the Telegram MTProto (user-account) API
+- Source: https://github.com/LonamiWebs/Telethon (community, MIT)
+- Gap it addressed: reading posts from Telegram channels a bot cannot access
+- Verdict: rejected (2026-07-26)
+- Why: repository was **archived in February 2026** — no longer maintained. Not a base for a
+  new project that must run unattended against an evolving API. Historically the default
+  choice, so expect to see it recommended everywhere; that advice is now stale.
+- Access it needs: Telegram user account (phone number + login session)
+- Used in: —
+- History: 2026-07-26 — evaluated for telegram-shop-bot-ehsan, ruled out on maintenance
+
+## Kurigram / Pyrofork (Pyrogram forks)
+- What: maintained forks of Pyrogram, async Python MTProto clients for user accounts and bots
+- Source: https://github.com/KurimuzonAkuma/kurigram · https://github.com/Mayuri-Chan/pyrofork (community)
+- Gap it addressed: same — read-only indexing of public Telegram channels
+- Verdict: shortlisted, not yet vetted (2026-07-26)
+- Why: the actively-maintained successors after Telethon's archival and upstream Pyrogram's
+  slowdown. Full `vet-tools` run (maintenance signal, license, dependency surface) deferred to
+  build time — no library gets adopted while the project is still in design.
+- Access it needs: Telegram user account (phone number + login session); read-only usage
+- Used in: —
+- History: 2026-07-26 — surfaced during telegram-shop-bot-ehsan intake
+
+## Telegram user-account reading (MTProto) vs. Bot API (approach note)
+- What: not a tool — the access-path constraint that shapes any "bot reads channels" project
+- Source: https://core.telegram.org/bots/faq (official)
+- Gap it addressed: reading channels the operator does not own
+- Verdict: documented constraint (2026-07-26)
+- Why: a **bot** only receives messages from channels it has been added to, and it cannot add
+  itself — so any project whose premise is "the bot searches other people's channels" needs
+  either a user-account (MTProto) reader, or the operator forwarding posts into a channel the
+  bot administers. Worth checking first in any similar project: it decides the architecture.
+  Risk profile for a user account: reading channel history is the low-risk usage; member-list
+  extraction, mass DMs and mass-adding are what trigger account restrictions.
+- Access it needs: dedicated phone number + login session (never the operator's personal account)
+- Used in: telegram-shop-bot-ehsan (design stage)
+- History: 2026-07-26 — established during telegram-shop-bot-ehsan intake
