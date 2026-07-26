@@ -53,6 +53,15 @@ customers.
 4. `BotApiError: sendMessage: Not Found` means **the bot token is wrong or missing** —
    not a routing problem. Check `getMe` with the token first to isolate it.
 
+## Live findings
+- **Fixed (2026-07-26):** re-posting a product under a second name showed the *first* post's
+  photo and description. A priced older post outranked a newer post whose price could not be
+  parsed — and captions with two prices («تکی»/«عمده») parse to no price by design, so this
+  triggered on an ordinary caption. Ranking is now newest-only. See DECISIONS.
+- **Open question for Ehsan:** if he routinely writes two prices in one caption, much of the
+  catalogue will read «نیاز به استعلام». Which price should win? Probably the single-unit one,
+  but that is his call, not a code decision.
+
 ## Next
 1. Ehsan posts ~10 real products in the channel, then check: do the cards read correctly,
    do prices parse, is anything showing «نیاز به استعلام» that shouldn't?

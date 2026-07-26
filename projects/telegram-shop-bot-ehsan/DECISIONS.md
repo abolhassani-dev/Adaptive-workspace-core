@@ -307,3 +307,27 @@ Also recorded, because both cost real time and are not obvious: the Cloudflare S
 has **two** "Variables and secrets" sections — the one inside the Build box is build-time
 only and does not reach the running bot — and `BotApiError: sendMessage: Not Found` means
 the **token** is wrong or unset, not that anything is misrouted.
+
+## 2026-07-26 — BUG: a priced older post beat a newer one, resurrecting superseded posts
+Reported from live use: a product was re-posted under a second name with a new photo and new
+specs, the two names were connected in the admin panel, and a customer searching the first
+name was shown the **first** post's photo and description.
+
+Cause, in `searchProducts`: offers were ordered priced-before-unpriced, and `best` was
+`offers.find(o => o.price !== null)`. So a post whose price the parser could read outranked a
+newer post whose price it could not — and the customer got the old photo, old description and
+old price. Exactly the case the "newest wins" invariant exists to prevent.
+
+Why it triggered so easily: the re-post's caption carried **two** prices («تکی» and «عمده»),
+which `parsePrice` deliberately resolves to null. So a perfectly ordinary caption silently
+resurrected the superseded post.
+
+Fixed: `newestFirst` now sorts by post date alone, and `best` is simply the newest post. If the
+newest post's price is unreadable the card says «نیاز به استعلام» beside the *new* photo, which
+is honest; pairing a confident old number with a product that has since changed is not.
+
+Reproduced against a real local D1 before and after the fix.
+
+**Raised with the owner, not decided:** if Ehsan routinely writes two prices in one caption
+(تکی / عمده), much of his catalogue will show «نیاز به استعلام». Which price should win is a
+business decision — likely the single-unit one — and needs his answer before being coded.
