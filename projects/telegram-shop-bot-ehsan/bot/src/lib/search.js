@@ -6,12 +6,18 @@ import { now, DAY, FRESHNESS_DAYS, POST_MAX_AGE_DAYS, MAX_RESULTS } from './conf
 
 export const isFresh = (postedAt) => now() - postedAt <= FRESHNESS_DAYS * DAY;
 
-// Most recently posted first; a post with no readable price sorts last so it is
-// still reachable when the newest post happens to omit the number.
-const newestFirst = (a, b) => {
-  if ((a.price === null) !== (b.price === null)) return a.price === null ? 1 : -1;
-  return b.postedAt - a.postedAt;
-};
+/**
+ * Most recently posted first. Nothing else — deliberately.
+ *
+ * This used to prefer a post whose price parsed over a newer one whose price
+ * did not, which quietly resurrected superseded posts: re-post a product with a
+ * caption the price parser can't read, and the customer was shown the OLD
+ * photo, OLD description and OLD price. In a catalogue Ehsan curates himself, a
+ * later post IS the product; if its price is unreadable the honest answer is
+ * «نیاز به استعلام» beside the new photo, not a confident old number attached to
+ * a product that has since changed.
+ */
+const newestFirst = (a, b) => b.postedAt - a.postedAt;
 
 // Which canonical products does this query name? This is the layer that lets a
 // customer type «کاسه ۸.۵» and reach posts that only ever say «قالب کیک یزدی».
@@ -85,14 +91,11 @@ export async function searchProducts(rawQuery) {
 
   const result = [];
   for (const g of groups.values()) {
-    // Cheapest first, but only among priced offers; unpriced ones sort last so
-    // they are still reachable when nobody published a number.
+    // Newest wins, full stop. The channel is Ehsan's own catalogue, so the most
+    // recent post for a product is the current one — new price, new photo, new
+    // description, whether the price went up, down, or became unreadable.
     g.offers.sort(newestFirst);
-
-    // Newest wins, not cheapest. The channel is Ehsan's own catalogue, so a
-    // later post for the same product IS the current price — including when he
-    // raises it. Picking the cheapest would quote a superseded price back at him.
-    g.best = g.offers.find((o) => o.price !== null) || g.offers[0];
+    g.best = g.offers[0];
 
     const linked = g.key.startsWith('p:') ? productNames.get(g.best.productId) : null;
     if (linked) {
