@@ -1,7 +1,8 @@
 import { api } from '../sdk.js';
+import { showScreen } from './screen.js';
 import { formatPrice, formatPriceShort } from './price.js';
 import { relativeDate } from './dates.js';
-import { truncate } from './text.js';
+import { truncate, toPersianDigits } from './text.js';
 import { isFresh } from './search.js';
 
 // No parse_mode anywhere in this bot. Supplier captions and customer names are
@@ -26,9 +27,12 @@ export function mainMenu(isAdmin = false) {
   return { keyboard: rows, resize_keyboard: true };
 }
 
-export const cardButtons = (postId) => ({
+export const cardButtons = (postId, extraPhotos = 0) => ({
   inline_keyboard: [
     [{ text: '➕ افزودن به سبد خرید', callback_data: `add:${postId}` }],
+    ...(extraPhotos > 0
+      ? [[{ text: `📷 عکس‌های بیشتر (${toPersianDigits(extraPhotos)})`, callback_data: `pics:${postId}` }]]
+      : []),
     [{ text: '🔍 استعلام جنس جدید', callback_data: 'search' }],
     [{ text: '↩️ بازگشت', callback_data: 'home' }],
   ],
@@ -78,51 +82,42 @@ export function cardText(group) {
     lines.push('همکاران ما قیمت و موجودی را هنگام تماس اعلام می‌کنند.');
   }
 
+  // The template's own fields, each on its own labelled row — the point of the
+  // template is that a customer can scan them without reading a paragraph.
+  const specs = [];
+  if (offer.material) specs.push(`🧱 جنس: ${offer.material}`);
+  if (offer.pack) specs.push(`📦 هر بسته: ${offer.pack}`);
+  if (specs.length > 0) lines.push('', ...specs);
+
   if (offer.description) {
-    lines.push('', `ℹ️ ${truncate(offer.description, 500)}`);
+    lines.push('', `ℹ️ ${truncate(offer.description, 400)}`);
   }
   return lines.join('\n');
 }
 
-/**
- * Send the card. A single photo carries its caption and buttons in one message.
- * An album cannot carry buttons at all — Telegram does not allow reply_markup on
- * sendMediaGroup — so the photos go first and the text with its buttons follows
- * immediately, which reads as one card in the chat.
- */
-export async function sendProductCard(chatId, group) {
+export function cardPhotos(group) {
   const offer = group.best;
   const photos = [];
   if (group.pinnedPhotoId) photos.push(group.pinnedPhotoId);
   for (const id of (Array.isArray(offer.photoIds) ? offer.photoIds : [])) {
     if (!photos.includes(id)) photos.push(id);
   }
+  return photos;
+}
 
-  const text = cardText(group);
-  const reply_markup = cardButtons(offer.id);
-
-  if (photos.length === 0) {
-    await api.sendMessage({ chat_id: chatId, text, reply_markup });
-    return;
-  }
-
-  if (photos.length === 1) {
-    // Caption limit is 1024; the card is well under it, but truncate defensively
-    // rather than let a long supplier description fail the whole send.
-    await api.sendPhoto({
-      chat_id: chatId,
-      photo: photos[0],
-      caption: truncate(text, 1000),
-      reply_markup,
-    });
-    return;
-  }
-
-  await api.sendMediaGroup({
-    chat_id: chatId,
-    media: photos.slice(0, 10).map((id) => ({ type: 'photo', media: id })),
+/**
+ * Draw the card as **one** message, so navigating rewrites it instead of piling
+ * up. A post with several photos shows the first and offers the rest behind a
+ * button: an album is several messages that cannot be edited or carry buttons,
+ * which is exactly the clutter this avoids.
+ */
+export async function sendProductCard(chatId, tgId, group) {
+  const photos = cardPhotos(group);
+  await showScreen(chatId, tgId, {
+    text: cardText(group),
+    photo: photos[0] || null,
+    reply_markup: cardButtons(group.best.id, Math.max(0, photos.length - 1)),
   });
-  await api.sendMessage({ chat_id: chatId, text, reply_markup });
 }
 
 // Ambiguous search: let the customer pick rather than guessing for them.

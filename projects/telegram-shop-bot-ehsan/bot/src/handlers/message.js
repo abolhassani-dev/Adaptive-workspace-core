@@ -3,13 +3,12 @@ import { getSession, setSession, clearSession, setSetting } from '../lib/session
 import { isAdmin, getAdminId, ADMIN_KEY, addToCart } from '../lib/cart.js';
 import { BTN, mainMenu } from '../lib/ui.js';
 import {
-  askForSearch, runSearch, showCart, startCheckout,
-  askForPhone, finishOrder, saveCustomer,
+  askForSearch, runSearch, showCart, startCheckout, showMyOrders,
+  askForPhone, finishOrder, saveCustomer, ensurePhone, welcome,
 } from '../lib/flow.js';
 import { sendAdminMenu, createProduct, addAlias, findProducts } from '../lib/admin.js';
 import { foldDigits, toPersianDigits, truncate, normalizePhone } from '../lib/text.js';
-import { ordersFor, itemsFor } from '../lib/cart.js';
-import { relativeDate } from '../lib/dates.js';
+import { showScreen } from '../lib/screen.js';
 
 const WELCOME = [
   'سلام 👋',
@@ -32,19 +31,23 @@ export default async function (message) {
   // Telegram's share-contact button — the whole reason a customer never types
   // their number. Only ever trust the contact the sender shared about themself.
   if (message.contact) {
+    // Only ever trust a number the sender shared about themself — forwarding
+    // someone else's contact card must not register them as this customer.
+    if (message.contact.user_id && message.contact.user_id !== tgId) {
+      await api.sendMessage({ chat_id: chatId, text: 'لطفاً شماره‌ی خودتان را بفرستید.' });
+      return;
+    }
+    const phone = normalizePhone(message.contact.phone_number);
+    const customer = await saveCustomer(tgId, { phone });
     const session = await getSession(tgId);
+
     if (session.state === 'awaiting_phone') {
-      if (message.contact.user_id && message.contact.user_id !== tgId) {
-        await api.sendMessage({
-          chat_id: chatId,
-          text: 'لطفاً شماره‌ی خودتان را بفرستید.',
-        });
-        return;
-      }
-      const customer = await saveCustomer(tgId, { phone: normalizePhone(message.contact.phone_number) });
+      // Shared at checkout: the order was already waiting on it.
       await finishOrder(chatId, tgId, customer);
       return;
     }
+    // Shared at the door: this is the point the shop opens for them.
+    await welcome(chatId, tgId, `✅ شماره شما ثبت شد.\n\n${WELCOME}`);
     return;
   }
 
@@ -54,7 +57,8 @@ export default async function (message) {
   // ── commands ────────────────────────────────────────────────────────────
   if (text === '/start') {
     await clearSession(tgId);
-    await api.sendMessage({ chat_id: chatId, text: WELCOME, reply_markup: mainMenu(admin) });
+    if (!(await ensurePhone(chatId, tgId))) return;
+    await welcome(chatId, tgId, WELCOME);
     return;
   }
 
@@ -78,12 +82,18 @@ export default async function (message) {
         text: '✅ شما به‌عنوان مدیر ثبت شدید.',
         reply_markup: mainMenu(true),
       });
-      await sendAdminMenu(chatId);
+      await sendAdminMenu(chatId, '', tgId);
     } else if (existing === tgId) {
-      await sendAdminMenu(chatId);
+      await sendAdminMenu(chatId, '', tgId);
     }
     return;
   }
+
+  // ── the phone gate ──────────────────────────────────────────────────────
+  // Past this line every path assumes a reachable customer. /start, /id and
+  // /setadmin above are deliberately outside it, so a first-time visitor can be
+  // greeted and Ehsan can claim the admin role before any number exists.
+  if (!(await ensurePhone(chatId, tgId))) return;
 
   // ── main menu ───────────────────────────────────────────────────────────
   if (text === BTN.search) { await askForSearch(chatId, tgId); return; }
@@ -97,7 +107,7 @@ export default async function (message) {
     });
     return;
   }
-  if (text === BTN.admin && admin) { await clearSession(tgId); await sendAdminMenu(chatId); return; }
+  if (text === BTN.admin && admin) { await clearSession(tgId); await sendAdminMenu(chatId, '', tgId); return; }
 
   // ── stateful steps ──────────────────────────────────────────────────────
   const session = await getSession(tgId);
@@ -112,8 +122,7 @@ export default async function (message) {
       }
       await addToCart(tgId, { id: data.postId, price: data.price ?? null }, data.title, qty);
       await clearSession(tgId);
-      await api.sendMessage({
-        chat_id: chatId,
+      await showScreen(chatId, tgId, {
         text: `✅ «${data.title}» — ${toPersianDigits(qty)} عدد به سبد خرید اضافه شد.`,
         reply_markup: {
           inline_keyboard: [
@@ -150,8 +159,7 @@ export default async function (message) {
       if (!admin) { await clearSession(tgId); return; }
       const product = await createProduct(text);
       await setSession(tgId, 'admin_alias', { productId: product.id, name: product.name });
-      await api.sendMessage({
-        chat_id: chatId,
+      await showScreen(chatId, tgId, {
         text: `✅ کالای «${product.name}» ثبت شد.\n\nحالا اسم‌های دیگری که این کالا در کانال‌ها دارد را یکی‌یکی بفرستید.\nوقتی تمام شد /done را بزنید.`,
       });
       return;
@@ -161,12 +169,11 @@ export default async function (message) {
       if (!admin) { await clearSession(tgId); return; }
       if (text === '/done') {
         await clearSession(tgId);
-        await sendAdminMenu(chatId, '✅ ثبت اسم‌ها تمام شد.');
+        await sendAdminMenu(chatId, '✅ ثبت اسم‌ها تمام شد.', tgId);
         return;
       }
       const linked = await addAlias(data.productId, text);
-      await api.sendMessage({
-        chat_id: chatId,
+      await showScreen(chatId, tgId, {
         text: `➕ «${text}» به‌عنوان اسم دیگرِ «${data.name}» ثبت شد.\nالان ${toPersianDigits(linked)} پست به این کالا وصل است.\n\nاسم بعدی را بفرستید یا /done را بزنید.`,
       });
       return;
@@ -176,14 +183,13 @@ export default async function (message) {
       if (!admin) { await clearSession(tgId); return; }
       const found = await findProducts(text);
       if (found.length === 0) {
-        await api.sendMessage({
-          chat_id: chatId,
+        await showScreen(chatId, tgId, {
           text: 'کالایی با این نام پیدا نشد. نام دیگری بنویسید، یا از بخش مدیریت این را به‌عنوان کالای جدید ثبت کنید.',
+          reply_markup: { inline_keyboard: [[{ text: '↩️ بازگشت', callback_data: 'adm:unmatched' }]] },
         });
         return;
       }
-      await api.sendMessage({
-        chat_id: chatId,
+      await showScreen(chatId, tgId, {
         text: `«${data.phrase}» اسم دیگرِ کدام کالاست؟`,
         reply_markup: {
           inline_keyboard: [
@@ -206,28 +212,4 @@ export default async function (message) {
   // Customers type the product name straight into the chat far more often than
   // they tap a menu button first.
   await runSearch(chatId, tgId, text);
-}
-
-async function showMyOrders(chatId, tgId) {
-  const rows = await ordersFor(tgId, 5);
-  if (rows.length === 0) {
-    await api.sendMessage({ chat_id: chatId, text: 'هنوز سفارشی ثبت نکرده‌اید.' });
-    return;
-  }
-  const label = {
-    new: '🆕 ثبت شده',
-    working: '🔄 در حال پیگیری',
-    closed: '✅ انجام شد',
-    cancelled: '❌ منتفی شد',
-  };
-  const lines = ['📋 سفارش‌های شما', ''];
-  for (const o of rows) {
-    const items = await itemsFor(o.id);
-    lines.push(`#${toPersianDigits(o.id)} — ${label[o.status] || o.status} — ${relativeDate(o.createdAt)}`);
-    for (const i of items) {
-      lines.push(`   • ${i.title} — ${toPersianDigits(i.qty)} عدد`);
-    }
-    lines.push('');
-  }
-  await api.sendMessage({ chat_id: chatId, text: lines.join('\n') });
 }

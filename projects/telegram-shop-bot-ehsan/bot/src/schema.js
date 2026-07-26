@@ -19,6 +19,10 @@ export const posts = table('posts', {
   description: text('description').default(''),
   photoIds: json('photo_ids'),
   price: integer('price'),
+  // From the posting template: line 3 and line 4. Shown as their own labelled
+  // rows on the product card rather than buried in the description.
+  material: text('material'),
+  pack: text('pack'),
   // original channel name, when the post was forwarded. Best-effort: may be null
   // for hand-posted items, which is fine — notifications always link to the post.
   supplier: text('supplier'),
@@ -118,8 +122,29 @@ export const sessions = table('sessions', {
   tgId: integer('tg_id').notNull().unique(),
   state: text('state').default('idle'),
   data: json('data'),
+  // The one message the bot keeps rewriting instead of posting a new one each
+  // step. `screenKind` records whether it currently holds a photo or plain text,
+  // because Telegram cannot convert one into the other by editing.
+  screenId: integer('screen_id'),
+  screenKind: text('screen_kind'),
   updatedAt: integer('updated_at').default(sql`(unixepoch())`),
 });
+
+// Customer footprints. Deliberately coarse: who appeared, what they searched,
+// what they ordered — enough for Ehsan to see demand, without logging every tap.
+// kind: 'start' | 'search' | 'order'
+export const events = table('events', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  tgId: integer('tg_id').notNull(),
+  kind: text('kind').notNull(),
+  detail: text('detail'),
+  // for a search: did it match anything? null for other kinds
+  found: boolean('found'),
+  createdAt: integer('created_at').default(sql`(unixepoch())`),
+}, (t) => ({
+  createdIdx: index('idx_events_created').on(t.createdAt),
+  ownerIdx: index('idx_events_owner').on(t.tgId),
+}));
 
 // Small key/value store for runtime settings (e.g. the admin's telegram id,
 // so it never has to be hard-coded or committed).

@@ -1,8 +1,8 @@
 import { db } from '../sdk.js';
 import { eq, and, lt } from '../db.js';
 import { posts, products, aliases } from '../schema.js';
-import { normalize, sanitize, extractTitle, truncate } from './text.js';
-import { parsePrice, isPriceOnlyLine } from './price.js';
+import { normalize } from './text.js';
+import { parseCaption } from './postformat.js';
 import { now, DAY, POST_MAX_AGE_DAYS } from './config.js';
 
 // Largest available size of each photo — Telegram sends an array of sizes.
@@ -25,23 +25,17 @@ function supplierFrom(post) {
 }
 
 function buildFields(caption) {
-  const cleanCaption = sanitize(caption || '');
-  const title = extractTitle(caption || '', isPriceOnlyLine);
-  // The description is what the caption says beyond its name and its price,
-  // minus anything that pointed at the supplier. The card renders price and
-  // date in their own blocks, so repeating them here is pure noise.
-  const description = cleanCaption
-    .split('\n')
-    .filter((l) => l.trim() && l.trim() !== title && !isPriceOnlyLine(l))
-    .join('\n');
+  const parsed = parseCaption(caption || '');
   return {
     caption: caption || '',
-    title,
-    description: truncate(description, 600),
+    title: parsed.title,
+    price: parsed.price,
+    material: parsed.material,
+    pack: parsed.pack,
+    description: parsed.description,
     // Search over the ORIGINAL caption, not the sanitized one: a stripped phone
     // number never helps a search, but a stripped product word would hurt one.
     searchText: normalize(caption || ''),
-    price: parsePrice(caption || ''),
   };
 }
 

@@ -1,6 +1,8 @@
-import { db, api } from '../sdk.js';
-import { eq, and, desc, like, count } from '../db.js';
-import { products, aliases, unmatched, posts } from '../schema.js';
+import { db } from '../sdk.js';
+import { eq, and, desc, like, count, gte, inArray } from '../db.js';
+import { products, aliases, unmatched, posts, events, customers, orders } from '../schema.js';
+import { showScreen } from './screen.js';
+import { now, DAY } from './config.js';
 import { normalize, toPersianDigits, truncate } from './text.js';
 import { relativeDate } from './dates.js';
 import { relinkPosts } from './catalog.js';
@@ -11,6 +13,7 @@ export const adminMenu = () => ({
   inline_keyboard: [
     [{ text: '➕ افزودن کالا / اسم‌های دیگر', callback_data: 'adm:addproduct' }],
     [{ text: '📥 جستجوهای بی‌نتیجه', callback_data: 'adm:unmatched' }],
+    [{ text: '📈 گزارش مشتری‌ها', callback_data: 'rep:1' }],
     [{ text: '📊 سفارش‌ها', callback_data: 'adm:orders' }],
   ],
 });
@@ -134,11 +137,107 @@ export async function indexHealth() {
   return `📦 ${toPersianDigits(total)} پست فعال در حافظه بات.\n🕒 آخرین پست: ${last}`;
 }
 
-export async function sendAdminMenu(chatId, extra = '') {
+export async function sendAdminMenu(chatId, extra = '', tgId = chatId) {
   const health = await indexHealth();
-  await api.sendMessage({
-    chat_id: chatId,
+  await showScreen(chatId, tgId, {
     text: `${extra ? `${extra}\n\n` : ''}🛠 بخش مدیریت\n\n${health}`,
     reply_markup: adminMenu(),
   });
+}
+
+const WINDOWS = { 1: '۲۴ ساعت گذشته', 7: '۷ روز گذشته', 30: '۳۰ روز گذشته' };
+
+const windowButtons = (active) => [
+  Object.keys(WINDOWS).map((d) => ({
+    text: `${Number(d) === active ? '• ' : ''}${WINDOWS[d]}`,
+    callback_data: `rep:${d}`,
+  })),
+];
+
+/**
+ * The footprint report: who came in, what they asked for, what they ordered.
+ *
+ * Windows are rolling (last N days), not calendar days — a calendar "today"
+ * needs a timezone, and getting that wrong silently reports the wrong day.
+ * The labels say «گذشته» so the number always matches what is counted.
+ */
+export async function reportView(days = 1) {
+  const cutoff = now() - days * DAY;
+
+  const rows = await db.select().from(events)
+    .where(gte(events.createdAt, cutoff))
+    .orderBy(desc(events.id))
+    .all();
+
+  const searches = rows.filter((r) => r.kind === 'search');
+  const visitors = new Set(rows.map((r) => r.tgId));
+  const orderCount = rows.filter((r) => r.kind === 'order').length;
+  const misses = searches.filter((r) => !r.found).length;
+
+  const fresh = await db.select().from(customers)
+    .where(gte(customers.createdAt, cutoff)).all();
+
+  const ids = [...visitors];
+  const people = ids.length > 0
+    ? await db.select().from(customers).where(inArray(customers.tgId, ids)).all()
+    : [];
+  const nameOf = new Map(people.map((c) => [c.tgId, c.name || c.phone || 'بدون نام']));
+
+  const lines = [`📈 گزارش — ${WINDOWS[days] || `${toPersianDigits(days)} روز گذشته`}`, ''];
+  lines.push(`👥 ${toPersianDigits(visitors.size)} مشتری فعال (${toPersianDigits(fresh.length)} نفر جدید)`);
+  lines.push(`🔍 ${toPersianDigits(searches.length)} استعلام` +
+    (misses > 0 ? ` — ${toPersianDigits(misses)} مورد پیدا نشد` : ''));
+  lines.push(`🛒 ${toPersianDigits(orderCount)} سفارش`);
+
+  if (searches.length > 0) {
+    lines.push('', 'آخرین استعلام‌ها:');
+    for (const s of searches.slice(0, 12)) {
+      const who = nameOf.get(s.tgId) || 'ناشناس';
+      lines.push(`${s.found ? '✅' : '❌'} ${truncate(s.detail || '', 30)} — ${truncate(who, 22)} (${relativeDate(s.createdAt)})`);
+    }
+  } else {
+    lines.push('', 'در این بازه استعلامی ثبت نشده.');
+  }
+
+  return {
+    text: lines.join('\n'),
+    reply_markup: {
+      inline_keyboard: [
+        ...windowButtons(days),
+        [{ text: '👥 فهرست مشتری‌ها', callback_data: 'rep:people' }],
+        [{ text: '↩️ بازگشت', callback_data: 'adm:menu' }],
+      ],
+    },
+  };
+}
+
+// Every customer who ever registered, most recent first, with what they did.
+export async function peopleView() {
+  const people = await db.select().from(customers).orderBy(desc(customers.id)).limit(15).all();
+  if (people.length === 0) {
+    return { text: '👥 هنوز مشتری‌ای ثبت نشده.', reply_markup: backOnly() };
+  }
+
+  const ids = people.map((c) => c.tgId);
+  const rows = await db.select().from(events).where(inArray(events.tgId, ids)).all();
+  const orderRows = await db.select().from(orders).where(inArray(orders.tgId, ids)).all();
+
+  const lines = ['👥 مشتری‌ها', ''];
+  for (const c of people) {
+    const mine = rows.filter((r) => r.tgId === c.tgId);
+    const s = mine.filter((r) => r.kind === 'search').length;
+    const o = orderRows.filter((r) => r.tgId === c.tgId).length;
+    const last = mine.length > 0 ? Math.max(...mine.map((r) => r.createdAt)) : c.createdAt;
+    lines.push(`${c.name || 'بدون نام'} — ${c.phone || '—'}`);
+    lines.push(`   ${toPersianDigits(s)} استعلام · ${toPersianDigits(o)} سفارش · آخرین بازدید ${relativeDate(last)}`);
+  }
+  return {
+    text: lines.join('\n'),
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: '📈 بازگشت به گزارش', callback_data: 'rep:1' }],
+        [{ text: '↩️ بخش مدیریت', callback_data: 'adm:menu' }],
+      ],
+    },
+  };
 }

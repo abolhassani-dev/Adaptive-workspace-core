@@ -30,6 +30,17 @@ missing feature was ruled out on purpose.
 
 ## Invariants — do not break these
 
+0. **Nothing is shown before a phone number.** `ensurePhone()` in `src/lib/flow.js` gates
+   every path except `/start`, `/id`, `/setadmin` and the contact message itself — those
+   have to stay outside it so a first-time visitor can be greeted and Ehsan can claim the
+   admin role before any customer exists. The admin is exempt.
+0b. **One message per customer, rewritten in place.** `showScreen()` in `src/lib/screen.js`
+   owns it. Telegram cannot edit a text message into a photo message, so a change of kind
+   deletes and resends; edits accept inline keyboards only, so the bottom reply menu is sent
+   once and left alone; and a bot cannot delete a customer's own messages in a private chat,
+   so only the bot's side collapses. Anything that needs the share-contact keyboard must call
+   `forgetScreen()` first — that prompt cannot be an edit.
+
 1. **The bot composes its own product card** and never forwards or copies a post, and
    `sanitize()` in `src/lib/text.js` strips usernames, links and phone numbers from every
    description shown to a customer. Ehsan curates his own channel now, so this is a
@@ -38,8 +49,10 @@ missing feature was ruled out on purpose.
 2. **The first price written wins.** `parsePrice()` scans line by line and returns the first
    price it finds. This replaced an "ambiguous means null" rule that made ordinary
    «تکی … / عمده …» captions parse to no price at all. Position now carries the meaning —
-   see `POSTING-GUIDE.md`, the template Ehsan writes to: name on line 1, price on line 2,
-   description after. A caption with no currency marker still yields null, and the card then
+   see `POSTING-GUIDE.md`, the template Ehsan writes to: name, price, material, units per
+   pack, then description. `src/lib/postformat.js` reads it — position decides the field,
+   with a label («جنس: …») overriding position anywhere and a lone dash skipping a field
+   without shifting the rest. A caption with no currency marker still yields null, and the card then
    reads «نیاز به استعلام».
 3. **Every quote carries its date**, and prices past `FRESHNESS_DAYS` are shown as
    «نیاز به استعلام» rather than as firm.

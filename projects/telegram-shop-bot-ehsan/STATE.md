@@ -63,8 +63,28 @@ customers.
   the **first price written wins**, replacing "ambiguous means null". Hand the guide to Ehsan;
   everything else follows from it.
 
+## Added after launch (2026-07-26)
+- **Five-field posting template** (`bot/POSTING-GUIDE.md`): name / price / material /
+  units-per-pack / description. Material and pack are now their own columns and their own
+  labelled rows on the card. Position decides the field, with a label overriding position and
+  a lone dash skipping one.
+- **Phone required at the door.** Nothing is shown until a visitor shares their number;
+  `/start`, `/id`, `/setadmin` and the contact message are outside the gate, and the admin is
+  exempt.
+- **One message per customer, rewritten in place**, so the chat stops filling up. Telegram
+  cannot edit text into a photo (change of kind = delete + resend), edits carry inline
+  keyboards only (the bottom menu is sent once), and a bot cannot delete the customer's own
+  messages in a private chat — only the bot's side collapses. Multi-photo posts now show the
+  first photo with a «عکس‌های بیشتر» button instead of an album.
+- **📈 گزارش مشتری‌ها**: active customers, new ones, searches with found/not-found, orders,
+  the last twelve searches with names, and a per-customer list. Rolling 24h / 7d / 30d windows.
+
+⚠️ **Migrations 0002, 0003 and 0004 must be pasted into the D1 console** — the remote database
+is migrated by hand, so a deploy alone will not create the new columns and tables.
+
 ## Next
-1. Ehsan posts ~10 real products in the channel, then check: do the cards read correctly,
+1. Run migrations 0002–0004 on the remote D1 (see above), then redeploy
+2. Ehsan posts ~10 real products in the channel, then check: do the cards read correctly,
    do prices parse, is anything showing «نیاز به استعلام» that shouldn't?
 2. Tune `FRESHNESS_DAYS` and the price-ambiguity rule once real captions are visible
 3. **Rotate the bot token and webhook secret** — both appeared in shared screenshots

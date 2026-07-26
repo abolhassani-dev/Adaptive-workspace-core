@@ -364,3 +364,63 @@ change a price, which is also what makes newest-wins work.
 
 Verified with 41 assertions across the template, price-only posts, multi-line descriptions,
 two-price posts, ریال conversion, «هزار» forms, and pack sizes that must not read as prices.
+
+## 2026-07-26 — Five-field posting template, parsed positionally
+The owner specified the template: name / price / material / units-per-pack / description.
+`src/lib/postformat.js` reads it and `posts` gained `material` and `pack` columns, so the card
+shows them as their own labelled rows («🧱 جنس», «📦 هر بسته») instead of burying them in a
+paragraph.
+
+Position decides the field, because that is the rule Ehsan can remember. Two escape hatches
+stop one slipped line from cascading — a forgotten material would otherwise turn the pack size
+into the material and the description into the pack size:
+- **a label wins over position, anywhere** — «جنس: استیل» is the material on any line;
+- **a lone dash skips a field** without shifting the lines below it.
+
+Also handled, because they occur in real captions: a wholesale price line («عمده …») is
+recognised as a price and skipped rather than being read as the material; a line that is not a
+price at all in position 2 gives up the price slot instead of swallowing the material; and
+«استعلام قیمت» in position 2 means "no price" rather than sliding down a field.
+
+## 2026-07-26 — Phone number required at the door
+Every visitor must share their phone before the bot shows anything. Ehsan's entire workflow is
+phoning people back, so a visitor without a number is a lead he cannot act on, and asking at
+the door costs one tap on Telegram's own share button.
+
+`/start`, `/id`, `/setadmin` and the contact message are deliberately outside the gate — a
+first-time visitor still gets greeted, and Ehsan can claim the admin role before any customer
+record exists. The admin is exempt from the gate entirely.
+
+Consequence worth knowing: this is the point at which the bot starts holding personal data on
+every visitor rather than only on buyers. Nothing is exported and no third party sees it.
+
+## 2026-07-26 — One message per customer, rewritten in place
+The owner asked for each step to replace the previous message rather than add one. Implemented
+in `src/lib/screen.js`: the message id is kept per customer and every step edits it.
+
+Three Telegram limits shape what this can be, and all three are worked around rather than
+hidden:
+- **A text message cannot become a photo message.** A change of kind deletes the old message
+  and sends a new one, so it still reads as one evolving message.
+- **Edits carry inline keyboards only.** The bottom reply menu is sent once at registration and
+  left in place; every screen uses inline buttons.
+- **A bot cannot delete a customer's own messages in a private chat.** Their typed lines remain.
+  Told to the owner plainly rather than promising a fully clean chat.
+
+One design change follows from it: a multi-photo post now shows the first photo on the card with
+a «📷 عکس‌های بیشتر» button, instead of sending an album. An album is several messages that
+cannot be edited or carry buttons — exactly the clutter this feature exists to remove.
+
+## 2026-07-26 — Customer footprint report
+New `events` table (kind: start | search | order) and a **📈 گزارش مشتری‌ها** section: active
+customers, how many are new, searches with a found/not-found split, orders, and the last twelve
+searches with the customer's name against each. Plus a customer list with per-person search and
+order counts and last visit.
+
+Only three event kinds are logged, not every tap: the report exists so Ehsan can see demand,
+and per-tap logging would bury that signal and grow the table for nothing. `logEvent` never
+throws — a failed log must not cost a customer their search.
+
+Windows are rolling (last 24h / 7d / 30d) rather than calendar days, and labelled «گذشته» to
+match. A calendar "today" needs a timezone, and getting that wrong reports the wrong day
+silently.

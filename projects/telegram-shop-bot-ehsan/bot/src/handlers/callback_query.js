@@ -4,12 +4,13 @@ import { orders, unmatched } from '../schema.js';
 import { getSession, setSession, clearSession } from '../lib/session.js';
 import { isAdmin, addToCart, removeCartItem } from '../lib/cart.js';
 import { getGroupForPost } from '../lib/search.js';
-import { sendProductCard, qtyButtons } from '../lib/ui.js';
-import { showHome, askForSearch, showCart, startCheckout } from '../lib/flow.js';
+import { sendProductCard, qtyButtons, cardPhotos } from '../lib/ui.js';
+import { showHome, askForSearch, showCart, startCheckout, ensurePhone, showMyOrders } from '../lib/flow.js';
 import {
   sendAdminMenu, unmatchedList, unmatchedActions, resolveUnmatched,
-  ordersSummary, createProduct, addAlias,
+  ordersSummary, createProduct, addAlias, reportView, peopleView,
 } from '../lib/admin.js';
+import { showScreen } from '../lib/screen.js';
 import { toPersianDigits } from '../lib/text.js';
 
 export default async function (cb) {
@@ -21,6 +22,10 @@ export default async function (cb) {
   const ack = (text) => api.answerCallbackQuery({ callback_query_id: cb.id, text }).catch(() => {});
 
   try {
+    // Buttons from an older message can still be tapped by someone who never
+    // registered a number — the gate has to hold here too, not only on text.
+    if (!(await ensurePhone(chatId, tgId))) { await ack(); return; }
+
     // ── customer actions ──────────────────────────────────────────────────
     if (data === 'home') { await ack(); await showHome(chatId, tgId); return; }
     if (data === 'search') { await ack(); await askForSearch(chatId, tgId); return; }
@@ -31,7 +36,7 @@ export default async function (cb) {
       await ack();
       const group = await getGroupForPost(Number(data.slice(5)));
       if (!group) { await api.sendMessage({ chat_id: chatId, text: 'این کالا دیگر در دسترس نیست.' }); return; }
-      await sendProductCard(chatId, group);
+      await sendProductCard(chatId, tgId, group);
       return;
     }
 
@@ -45,8 +50,7 @@ export default async function (cb) {
         title: group.title,
         price: group.best.price ?? null,
       });
-      await api.sendMessage({
-        chat_id: chatId,
+      await showScreen(chatId, tgId, {
         text: `«${group.title}»\nچه تعداد می‌خواهید؟`,
         reply_markup: qtyButtons(),
       });
@@ -61,8 +65,7 @@ export default async function (cb) {
       await addToCart(tgId, { id: d.postId, price: d.price ?? null }, d.title, qty);
       await clearSession(tgId);
       await ack('به سبد خرید اضافه شد');
-      await api.sendMessage({
-        chat_id: chatId,
+      await showScreen(chatId, tgId, {
         text: `✅ «${d.title}» — ${toPersianDigits(qty)} عدد به سبد خرید اضافه شد.`,
         reply_markup: {
           inline_keyboard: [
@@ -71,6 +74,20 @@ export default async function (cb) {
             [{ text: '↩️ بازگشت', callback_data: 'home' }],
           ],
         },
+      });
+      return;
+    }
+
+    if (data.startsWith('pics:')) {
+      await ack();
+      const group = await getGroupForPost(Number(data.slice(5)));
+      const photos = group ? cardPhotos(group).slice(1, 10) : [];
+      if (photos.length === 0) return;
+      // The album is a genuine extra message; it is not the screen, so the next
+      // navigation step still rewrites the card rather than this.
+      await api.sendMediaGroup({
+        chat_id: chatId,
+        media: photos.map((id) => ({ type: 'photo', media: id })),
       });
       return;
     }
@@ -109,14 +126,16 @@ export default async function (cb) {
       return;
     }
 
-    if (data === 'adm:menu') { await ack(); await clearSession(tgId); await sendAdminMenu(chatId); return; }
+    if (data === 'myorders') { await ack(); await showMyOrders(chatId, tgId); return; }
+
+    if (data === 'adm:menu') { await ack(); await clearSession(tgId); await sendAdminMenu(chatId, '', tgId); return; }
 
     if (data === 'adm:addproduct') {
       await ack();
       await setSession(tgId, 'admin_product_name');
-      await api.sendMessage({
-        chat_id: chatId,
+      await showScreen(chatId, tgId, {
         text: 'نام اصلی کالای جدید را بنویسید:\n(مثلاً: قالب کیک یزدی)',
+        reply_markup: { inline_keyboard: [[{ text: '↩️ بازگشت', callback_data: 'adm:menu' }]] },
       });
       return;
     }
@@ -125,14 +144,22 @@ export default async function (cb) {
       await ack();
       await clearSession(tgId);
       const view = await unmatchedList();
-      await api.sendMessage({ chat_id: chatId, ...view });
+      await showScreen(chatId, tgId, view);
       return;
     }
 
     if (data === 'adm:orders') {
       await ack();
       const view = await ordersSummary();
-      await api.sendMessage({ chat_id: chatId, ...view });
+      await showScreen(chatId, tgId, view);
+      return;
+    }
+
+    if (data.startsWith('rep:')) {
+      await ack();
+      const which = data.slice(4);
+      const view = which === 'people' ? await peopleView() : await reportView(Number(which) || 1);
+      await showScreen(chatId, tgId, view);
       return;
     }
 
@@ -141,7 +168,7 @@ export default async function (cb) {
       const row = await db.select().from(unmatched).where(eq(unmatched.id, Number(data.slice(3)))).get();
       if (!row) return;
       const view = unmatchedActions(row);
-      await api.sendMessage({ chat_id: chatId, ...view });
+      await showScreen(chatId, tgId, view);
       return;
     }
 
@@ -178,7 +205,7 @@ export default async function (cb) {
       await resolveUnmatched(Number(data.slice(4)));
       await ack('نادیده گرفته شد');
       const view = await unmatchedList();
-      await api.sendMessage({ chat_id: chatId, ...view });
+      await showScreen(chatId, tgId, view);
       return;
     }
 
@@ -188,7 +215,7 @@ export default async function (cb) {
       await resolveUnmatched(Number(umId));
       await clearSession(tgId);
       await ack('ثبت شد');
-      await sendAdminMenu(chatId, `✅ ثبت شد. الان ${toPersianDigits(linked)} پست به این کالا وصل است.`);
+      await sendAdminMenu(chatId, `✅ ثبت شد. الان ${toPersianDigits(linked)} پست به این کالا وصل است.`, tgId);
       return;
     }
 
