@@ -2,9 +2,10 @@
 Updated: 2026-07-26
 
 ## Phase
-**v1 built and verified end to end, not yet deployed.** Runs on Cloudflare Workers + D1.
-Deployment needs a Cloudflare account and the bot token, both of which are the owner's
-step — `bot/README.md` is the Persian walkthrough.
+**LIVE.** Deployed on Cloudflare Workers + D1 and responding in Telegram.
+Worker: `https://ehsan-shop-bot.aratekpal.workers.dev`
+Next real step is trying it with actual products in the channel, then handing it to a few
+customers.
 
 ## Done
 - Intake rounds 1–4; design at v4 (`DESIGN.md`), all decisions in `DECISIONS.md`
@@ -30,19 +31,40 @@ step — `bot/README.md` is the Persian walkthrough.
   4. phone shown in Persian digits — not tappable, and calling is the whole job
   5. «۰ پست وصل شد» after teaching an alias — read as failure when it had worked
 
+## Deployment (done 2026-07-26)
+- Cloudflare account created; D1 database `ehsan-shop-bot` created and migrated by pasting
+  the SQL from `bot/migrations/0001_init.sql` into the D1 console (no terminal involved —
+  the owner cannot use one, so the whole deploy was done through the browser)
+- Worker connected to this repo via Workers Builds, deploying from branch
+  `claude/telegram-shop-bot-ehsan-myvful`
+- `BOT_TOKEN` and `WEBHOOK_SECRET` set as Worker secrets (runtime, not build variables)
+- Webhook registered with `allowed_updates=[message, callback_query, channel_post]`
+- Bot confirmed responding in Telegram
+
+### What cost the most time, so it isn't repeated
+1. **Workers Builds "Retry build" replays the previous build's branch**, ignoring changed
+   settings — corrections appeared to do nothing. Only a fresh push produces a build with
+   the new configuration.
+2. The root-directory field is labelled **"Path"** at creation time (under Advanced
+   settings) and "Root directory" afterwards. It was resolved for good by adding a
+   wrangler config at the **repository root**, so the setting no longer matters.
+3. Settings has **two** sections called "Variables and secrets" — one inside the Build box
+   (build-time only) and one at the top (runtime). Only the top one reaches the bot.
+4. `BotApiError: sendMessage: Not Found` means **the bot token is wrong or missing** —
+   not a routing problem. Check `getMe` with the token first to isolate it.
+
 ## Next
-1. Owner: create a free Cloudflare account, then follow `bot/README.md` steps 1–8
-2. **Revoke the exposed bot token first** (BotFather → API Token → Revoke) — it appeared
-   in a screenshot; use the new one when setting `BOT_TOKEN`
-3. `/setadmin` immediately after deploy, before the bot reaches any customer
-4. Ehsan posts ~10 real products, then check the cards read correctly and prices parse
-5. Tune `FRESHNESS_DAYS` and the ambiguity rule once real captions are visible
+1. Ehsan posts ~10 real products in the channel, then check: do the cards read correctly,
+   do prices parse, is anything showing «نیاز به استعلام» that shouldn't?
+2. Tune `FRESHNESS_DAYS` and the price-ambiguity rule once real captions are visible
+3. **Rotate the bot token and webhook secret** — both appeared in shared screenshots
+4. Then hand the bot to a few real customers
 
 ## Blockers / waiting on
-- Cloudflare account + deployment (owner's step)
-- Real product posts needed before price parsing can be tuned. Captions carrying two
-  prices deliberately parse to "no price", so if Ehsan writes «تکی / عمده» routinely,
-  that rule is the first thing to revisit.
+- Real product posts, before price parsing can be tuned. Captions carrying two prices
+  deliberately parse to "no price", so if Ehsan writes «تکی / عمده» routinely, that rule
+  is the first thing to revisit.
+- Token and webhook secret rotation — exposed in screenshots during setup.
 
 ## Known gaps (deliberate)
 - Editing a channel post does not update the index (`edited_channel_post` unhandled);

@@ -285,3 +285,25 @@ pasted supplier caption from handing his customer their phone number).
 
 Grouping several posts under one product is still worth having — it is what makes a
 re-post supersede the previous price rather than appear as a second product.
+
+## 2026-07-26 — Deployed, entirely through the browser
+The bot is live on Cloudflare Workers + D1 and responding in Telegram.
+
+The owner cannot use a terminal, so the whole deployment was done in the browser: D1
+created in the dashboard and migrated by pasting `bot/migrations/0001_init.sql` into the D1
+console, the Worker connected to this repo via Workers Builds, secrets set in the dashboard,
+and the webhook registered by opening the `setWebhook` URL in the address bar. Worth keeping
+as the pattern for non-technical owners — no local tooling is needed at any point.
+
+One design change came out of the deploy itself: a **wrangler config now sits at the
+repository root** (`wrangler.toml` + `package.json`, with `main` pointing into
+`projects/telegram-shop-bot-ehsan/bot/src`). Three builds had failed because the
+root-directory setting is easy to get wrong in the dashboard and "Retry build" silently
+replays the old build's branch, so corrections never took effect. Putting the config at the
+root removes that setting from the equation entirely; the bot's code stays under `projects/`
+where the workspace layout puts it. Verified from the root with `wrangler deploy --dry-run`.
+
+Also recorded, because both cost real time and are not obvious: the Cloudflare Settings page
+has **two** "Variables and secrets" sections — the one inside the Build box is build-time
+only and does not reach the running bot — and `BotApiError: sendMessage: Not Found` means
+the **token** is wrong or unset, not that anything is misrouted.
