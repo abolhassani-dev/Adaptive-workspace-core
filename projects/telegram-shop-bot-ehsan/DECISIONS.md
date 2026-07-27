@@ -520,3 +520,25 @@ for exactly this.
 
 48 assertions pass, and the real caption now yields
 `title=قالب کنگره ۸/۵ · price=7000 · material=حلب، قطر دهنه ۹ سانت · pack=۲۵۰۰ عدد`.
+
+## 2026-07-26 — Edits batched pending Ehsan's real use; proposed list written first
+The owner is giving the bot to Ehsan for a few days before the next round of changes, and asked
+for a proposed edit list prepared independently.
+
+Written as `BACKLOG.md`, deliberately **before** his feedback arrives, so the two can be compared
+rather than blended — where my list and his agree, that item is genuinely urgent; where they
+differ, it is worth asking why. Sections: what is outright wrong today (token rotation, no status
+notification to the customer, no rate limit), what I expect him to hit within a week (post
+edits, price correction, seeing what the index holds), search quality, operational blind spots,
+and business direction to leave alone unless asked.
+
+Two judgements in it worth surfacing rather than burying:
+- **The customer is never told when their order status changes.** Ehsan taps «انجام شد» and the
+  customer hears nothing. The bot captures a lead and then goes silent — the largest hole in the
+  flow as built, and not something feedback is needed to confirm.
+- **Search demands every typed word.** «قالب کنگره ۹ سانت» misses «قالب کنگره ۸/۵» over one
+  word, and the customer gets a dead end. A looser retry labelled «شاید این‌ها را می‌خواستید»
+  is, I think, the highest-value change available — every not-found is a customer who leaves.
+
+Deliberately **not** proposing: payment, markup, multi-item catalogue posts. Each adds a concept
+Ehsan would have to learn, against the project's premise that he never has to.

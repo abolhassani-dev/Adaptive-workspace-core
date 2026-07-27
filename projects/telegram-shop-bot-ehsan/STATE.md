@@ -83,12 +83,19 @@ customers.
 is migrated by hand, so a deploy alone will not create the new columns and tables.
 
 ## Next
-1. Run migrations 0002–0004 on the remote D1 (see above), then redeploy
-2. Ehsan posts ~10 real products in the channel, then check: do the cards read correctly,
-   do prices parse, is anything showing «نیاز به استعلام» that shouldn't?
-2. Tune `FRESHNESS_DAYS` and the price-ambiguity rule once real captions are visible
-3. **Rotate the bot token and webhook secret** — both appeared in shared screenshots
-4. Then hand the bot to a few real customers
+**Waiting on Ehsan.** He is using the bot for a few days and will report back; edits are
+batched until then rather than changed under him mid-use.
+
+`BACKLOG.md` holds the proposed edit list, written before his feedback so the two can be
+compared. In priority order from that list:
+1. **Rotate the bot token and webhook secret** (A1) — both appeared in screenshots, and this
+   must happen before real customers, not after
+2. **Tell the customer when their order status changes** (A3) — the bot currently captures the
+   lead and then goes silent, which is the biggest hole in the flow
+3. **Per-customer rate limit** (A2) — the URL is public and the free tier has a daily ceiling
+4. **Looser fallback match before saying "not found"** (C1) — a not-found is a lost customer,
+   and search currently demands every typed word
+5. Then whatever Ehsan's feedback agrees with, first
 
 ## Blockers / waiting on
 - Real product posts, before price parsing can be tuned. Captions carrying two prices
