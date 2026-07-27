@@ -2,29 +2,34 @@
 Updated: 2026-07-27
 
 ## Phase
-v004 written: stochastic signal filter added. Waiting for the owner to paste it into
-TradingView and confirm it compiles and behaves as expected.
+v005 written: stochastic signal filter, polarity corrected to the classic reversal
+reading after the owner verified v004 on a live EURUSD 1m chart. Waiting for the owner
+to reload it in TradingView and confirm the signals now sit on the right side.
 
 ## Done
 - Read and mapped the full v003 logic (two engines, three models, HTF gate, simulator).
-- Added the stochastic filter as a single gate inside `f_emit()` — covers Models 1, 2, 3
-  and raw scob labels at once.
-- Settings live in a Persian group "فیلترِ استوکاستیک": on/off, %K Length, %K Smoothing,
-  %D Smoothing, overbought level, oversold level, which lines must be inside the zone,
-  polarity invert.
-- Default is OFF, so v003 behavior is bit-for-bit preserved until the owner enables it.
-- Two rows added to the debug panel (%K/%D of the trigger candle, and the buy/sell gate state).
+- v004: added the stochastic filter as a single gate inside `f_emit()` — covers
+  Models 1, 2, 3 and raw scob labels at once, reads the trigger candle at `[1]`,
+  no repaint, defaults to off.
+- Settings group "فیلترِ استوکاستیک": on/off, %K Length, %K Smoothing, %D Smoothing,
+  overbought level, oversold level, which lines must be inside the zone, filter logic.
+- Debug panel shows %K/%D of the trigger candle and the buy/sell gate state.
+- v005: polarity contradiction in the original request resolved against the owner's own
+  chart. Buy now requires the oversold zone, sell requires the overbought zone.
+  The old boolean toggle became a dropdown that names both readings explicitly.
 
 ## Next
-1. Owner pastes `perfect-scob-sequence.pine` into TradingView → confirm it compiles.
-2. Turn the filter on and eyeball a few signals against the debug panel (%K/%D values
-   should be inside the zone for every surviving label).
-3. Run the simulator on one fixed date range, filter OFF vs ON, and compare
-   Net R / win rate / MFE. Then repeat with "معکوس‌کردنِ قطبیت" enabled to settle
-   the continuation-vs-reversal question with numbers instead of opinion.
+1. Owner reloads `perfect-scob-sequence.pine` (v005) and confirms: surviving buy labels
+   sit where the stochastic is below 20, sell labels where it is above 80.
+2. Fixed date range, simulator on: filter OFF vs ON → compare Net R / win rate / MFE.
+3. Same range with "ادامه‌دهنده" selected, to test the continuation hypothesis with
+   numbers rather than intuition.
 4. Only after that: the Heikin Ashi variant the owner asked for.
 
 ## Blockers / waiting on
-- Pine cannot be compiled outside TradingView. Compilation and visual verification
-  are the owner's step; nothing here can substitute for it.
-</content>
+- Pine cannot be compiled or backtested outside TradingView. Verification is the
+  owner's step; nothing here substitutes for it.
+
+## Note for future sessions
+The owner reads charts, not code. When an option's behavior can be read two ways,
+name both readings in the option itself — do not rely on a tooltip.

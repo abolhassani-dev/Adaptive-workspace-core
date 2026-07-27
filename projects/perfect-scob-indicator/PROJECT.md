@@ -66,8 +66,6 @@ pastes into TradingView.
 Empty by design. TradingView itself is the runtime; the owner pastes the file in.
 
 ## Open questions
-- Polarity of the stochastic filter: the owner asked for buy-only-in-overbought /
-  sell-only-in-oversold (continuation logic). Implemented as the default, with an
-  invert toggle so the classic reversal reading can be tested on the same range.
-  Which one actually performs better is an empirical question, still unanswered.
-</content>
+- Which stochastic filter logic actually performs better — reversal (current default:
+  buy in oversold, sell in overbought) or continuation (the mirror image). Both are
+  selectable; the simulator can settle it on a fixed date range. Untested so far.

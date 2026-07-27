@@ -1,5 +1,22 @@
 # CHANGELOG — perfect-scob-sequence.pine
 
+## v005 — 2026-07-27 — Filter polarity: explicit dropdown, reversal by default
+The owner's request contained a contradiction: "buy only when the stochastic is in the
+overbought zone, and the reverse for sell". v004 implemented that literally (buy in
+overbought / sell in oversold). On the chart the owner saw a Model 2 sell fire with the
+stochastic below 20 and reported it as backwards — which settles the real intent as the
+classic reversal reading.
+
+- `stochInvert` (bool "معکوس‌کردنِ قطبیت") replaced by `stochLogic`, a two-option dropdown:
+  `برگشتی — خرید در اشباعِ فروش` (default) and `ادامه‌دهنده — خرید در اشباعِ خرید`.
+- Default is now reversal: **buy only below the oversold level, sell only above the
+  overbought level**.
+- Because the input identity changed, an existing chart picks up the new default
+  automatically instead of silently keeping the old polarity.
+
+No other logic touched — the gate still lives in the single `f_emit()` funnel and still
+reads the trigger candle at offset `[1]`.
+
 ## v004 — 2026-07-27 — Stochastic signal filter
 Added a stochastic gate that filters every signal the tool emits.
 
@@ -35,4 +52,3 @@ Detection logic of both engines is untouched.
 
 ## v003 — 2026-06-13 — HTF threshold made monotonic
 Independent buy/sell higher-timeframe levels. (Inherited; documented from the file header.)
-</content>

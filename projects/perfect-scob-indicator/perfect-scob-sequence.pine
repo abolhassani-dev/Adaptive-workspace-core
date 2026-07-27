@@ -1,6 +1,6 @@
 //@version=6
 // ===========================================================
-//  VERSION : v004   (Stochastic signal filter — single gate inside f_emit)
+//  VERSION : v005   (Stochastic filter polarity → explicit dropdown, default = reversal)
 //  DATE    : 2026-07-27
 //  HISTORY : see CHANGELOG.md  |  revert: 'go back to vNNN'
 // ===========================================================
@@ -44,7 +44,7 @@ stochPeriodD  = input.int(3,  "%D Smoothing", minval = 1, group = gStoch)
 stochUpper    = input.float(80.0, "سطحِ اشباعِ خرید", minval = 0, maxval = 100, group = gStoch, tooltip = "همان خطِ بالاییِ اندیکاتورِ استوکاستیک (پیش‌فرض ۸۰).")
 stochLower    = input.float(20.0, "سطحِ اشباعِ فروش", minval = 0, maxval = 100, group = gStoch, tooltip = "همان خطِ پایینیِ اندیکاتورِ استوکاستیک (پیش‌فرض ۲۰).")
 stochNeed     = input.string("هر دو خط", "کدام خط‌ها در ناحیه باشند", options = ["هر دو خط", "فقط %K", "حداقل یکی"], group = gStoch, tooltip = "«هر دو خط» = هم %K و هم %D داخلِ ناحیه (سخت‌گیرترین). «فقط %K» = فقط خطِ آبی. «حداقل یکی» = آسان‌گیرترین.")
-stochInvert   = input.bool(false, "معکوس‌کردنِ قطبیت", group = gStoch, tooltip = "خاموش (پیش‌فرض، همان چیزی که خواستی): خرید فقط در اشباعِ خرید، فروش فقط در اشباعِ فروش — منطقِ ادامهٔ حرکت. روشن: خرید فقط در اشباعِ فروش و فروش فقط در اشباعِ خرید — منطقِ کلاسیکِ برگشتی. برای مقایسهٔ دو فرضیه روی همان بک‌تست.")
+stochLogic    = input.string("برگشتی — خرید در اشباعِ فروش", "منطقِ فیلتر", options = ["برگشتی — خرید در اشباعِ فروش", "ادامه‌دهنده — خرید در اشباعِ خرید"], group = gStoch, tooltip = "«برگشتی» (پیش‌فرض، برداشتِ کلاسیک): سیگنالِ خرید فقط وقتی استوکاستیک زیرِ سطحِ اشباعِ فروش است، و سیگنالِ فروش فقط وقتی بالای سطحِ اشباعِ خرید است. «ادامه‌دهنده»: دقیقاً برعکس — خرید در اشباعِ خرید و فروش در اشباعِ فروش. هر دو را روی یک بازهٔ تاریخیِ ثابت با شبیه‌ساز مقایسه کن.")
 
 float stochK = ta.sma(ta.stoch(close, high, low, stochPeriodK), stochSmoothK)
 float stochD = ta.sma(stochK, stochPeriodD)
@@ -67,7 +67,9 @@ f_stochPass(int _dir) =>
             bool _osD = _d <= stochLower
             bool _ob = stochNeed == "فقط %K" ? _obK : stochNeed == "حداقل یکی" ? (_obK or _obD) : (_obK and _obD)
             bool _os = stochNeed == "فقط %K" ? _osK : stochNeed == "حداقل یکی" ? (_osK or _osD) : (_osK and _osD)
-            bool _wantOB = _dir == 1 ? not stochInvert : stochInvert
+            // ادامه‌دهنده ⇒ خرید سراغِ اشباعِ خرید می‌رود؛ برگشتی ⇒ خرید سراغِ اشباعِ فروش
+            bool _cont   = stochLogic == "ادامه‌دهنده — خرید در اشباعِ خرید"
+            bool _wantOB = _dir == 1 ? _cont : not _cont
             _ok := _wantOB ? _ob : _os
     _ok
 

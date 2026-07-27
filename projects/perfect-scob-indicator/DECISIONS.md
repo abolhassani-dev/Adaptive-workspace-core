@@ -36,10 +36,23 @@ arguing about it: the simulator can now settle continuation-vs-reversal on the s
 range with numbers. Rejected silently "correcting" the polarity — that would have
 delivered something other than what was asked for.
 
+## 2026-07-27 — Polarity resolved: reversal is the real intent (supersedes the v004 default)
+The owner's own chart settled the contradiction in the original request. A Model 2 sell
+label fired on EURUSD 1m with the stochastic below 20 — exactly what v004's default was
+built to do — and the owner reported it as backwards. Real intent: **buy only in the
+oversold zone, sell only in the overbought zone** (classic reading).
+The boolean "invert polarity" toggle was replaced with a two-option dropdown naming both
+readings in full, defaulting to reversal. Rejected keeping the checkbox and just telling
+the owner to tick it: the wording is what caused the misunderstanding, and the owner is
+not a programmer — an option whose meaning is only clear after reading a tooltip is a
+design defect. Changing the input's identity also makes existing charts adopt the correct
+default instead of silently keeping the old behavior.
+The continuation reading was kept as the second option rather than deleted — it is still
+an untested hypothesis, and the simulator can now compare both on one date range.
+
 ## 2026-07-27 — No plot of the stochastic on the chart
 The indicator is `overlay = true`; drawing %K/%D on price would be meaningless, and the
 80/20 band + fill from the source snippet cannot be reproduced on a price overlay.
 Instead the debug panel shows the two live values and the gate state, which is what is
 actually needed to verify a signal. Rejected adding a second pane — Pine cannot mix
 overlay and separate-pane plots in one script.
-</content>
