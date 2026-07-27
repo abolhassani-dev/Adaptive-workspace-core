@@ -1,0 +1,1565 @@
+//@version=6
+// ===========================================================
+//  VERSION : v004   (Stochastic signal filter — single gate inside f_emit)
+//  DATE    : 2026-07-27
+//  HISTORY : see CHANGELOG.md  |  revert: 'go back to vNNN'
+// ===========================================================
+//=================================================================
+// Combined Tool: PerfectScob + Sequence Candle
+// MODULE 1: PerfectScob (c) aliamirafshar, MPL-2.0 - detection logic 100% unchanged
+// MODULE 2: Sequence Candle - ported v5 -> v6, behavior unchanged
+// GLUE v2 — event-based (registries), no index arithmetic:
+//   مدل ۱ = کندلِ سوییپ‌شده عضوِ توالیِ هم‌جهت با خط (شمارش >= آستانهٔ خط)، یا فریزِ خطِ هم‌جهت سرِ خودِ رویدادِ اسکوب
+//   مدل ۲ = کندلِ سوییپ‌شده عضوِ توالیِ مخالف (شمارش >= حداقلِ مدل ۲)، یا فریزِ خطِ مخالف سرِ خودِ رویدادِ اسکوب
+//   تضمین: اسکوب + خطِ فریزشده سرِ همان رویداد ⇒ حتماً یکی از دو مدل.
+//=================================================================
+indicator("PerfectScob + Sequence — Simulator", overlay = true, max_labels_count = 500, max_lines_count = 500, max_boxes_count = 500, max_bars_back = 5000)
+
+// ===================== اتصالِ SCOB و Sequence — رویدادمحور =====================
+useScobLiqFilter = input.bool(true, "فقط SCOBهای منطبق با خط Sequence", group = "SCOB x Sequence Filter")
+useScobRevFilter = input.bool(true, "فیلتر مدل ۲ (برگشتِ توالی)", group = "SCOB x Sequence Filter")
+m2Color    = input.color(color.fuchsia, "رنگِ مدل ۲", group = "SCOB x Sequence Filter")
+m2MinCount = input.int(2, "حداقل توالی برای مدل ۲", minval = 1, group = "SCOB x Sequence Filter")
+seqThreshold = input.int(5, "حداقل تعداد کندل توالی برای شروع رسم خط", minval = 1)
+showZigzag = input.bool(true, "نمایش زیگزاگ", group = "SCOB x Sequence Filter")
+
+// ===================== شرطِ تایمِ بالا (HTF) =====================
+gHTF = "تایمِ بالا (شرطِ مدل ۱ و ۲)"
+useHtf      = input.bool(false, "فعال‌سازیِ شرطِ تایمِ بالا", group = gHTF, tooltip = "روشن: فقط مدل‌۱/۲هایی نشان داده می‌شوند که سطحِ نقدینگیِ تایمِ بالا را سوییپ کرده باشند و اسکوبشان اکستریمِ (پایین‌ترین/بالاترین) همان سوییپ باشد. خاموش: همان حالتِ تک‌تایمِ قبلی.")
+htfTF       = input.timeframe("5", "تایمِ بالا", group = gHTF, tooltip = "کندل‌های تایمِ بالا از روی چارت ساخته می‌شوند (بدونِ ری‌پینت). چارت باید کوچک‌تر از این باشد (مثلاً چارت ۱دقیقه، این ۵).")
+htfMinSeq   = input.int(2, "حداقل توالیِ تایمِ بالا", minval = 1, group = gHTF, tooltip = "چند کندلِ هم‌جهتِ تایمِ بالا لازم است تا سطحِ نقدینگی ساخته شود. پیش‌فرض ۲.")
+showHtfLine = input.bool(true, "نمایشِ خطِ سطحِ تایمِ بالا", group = gHTF, tooltip = "سطحِ نقدینگیِ تایمِ بالا (همان که گیت رویش تصمیم می‌گیرد) را رسم می‌کند؛ بعد از باطل‌شدن خاکستری و ثابت می‌شود.")
+htfUpCol    = input.color(color.green, "رنگِ سطحِ خرید (توالیِ صعودی)", group = gHTF)
+htfDnCol    = input.color(color.red,   "رنگِ سطحِ فروش (توالیِ نزولی)", group = gHTF)
+
+// ===================== فیلترِ استوکاستیک (Stochastic) =====================
+// گیتِ سراسریِ سیگنال: روی هر سه مدل (۱/۲/۳) اعمال می‌شود.
+// خواندنِ استوکاستیک روی کندلِ ماشه‌ی تأییدشده (bar_index-1) است ⇒ بدونِ ری‌پینت،
+// و دقیقاً همان کندلی که شرطِ اسکوب رویش بسته شده.
+gStoch = "فیلترِ استوکاستیک"
+useStoch      = input.bool(false, "فعال‌سازیِ فیلترِ استوکاستیک", group = gStoch, tooltip = "روشن: فقط سیگنال‌هایی نمایش داده (و وارد شبیه‌ساز) می‌شوند که استوکاستیک در ناحیهٔ خواسته‌شده باشد؛ بقیهٔ سیگنال‌ها کاملاً حذف می‌شوند. خاموش: رفتارِ قبلیِ ابزار، بدونِ هیچ تغییری.")
+stochPeriodK  = input.int(14, "%K Length", minval = 1, group = gStoch)
+stochSmoothK  = input.int(1,  "%K Smoothing", minval = 1, group = gStoch)
+stochPeriodD  = input.int(3,  "%D Smoothing", minval = 1, group = gStoch)
+stochUpper    = input.float(80.0, "سطحِ اشباعِ خرید", minval = 0, maxval = 100, group = gStoch, tooltip = "همان خطِ بالاییِ اندیکاتورِ استوکاستیک (پیش‌فرض ۸۰).")
+stochLower    = input.float(20.0, "سطحِ اشباعِ فروش", minval = 0, maxval = 100, group = gStoch, tooltip = "همان خطِ پایینیِ اندیکاتورِ استوکاستیک (پیش‌فرض ۲۰).")
+stochNeed     = input.string("هر دو خط", "کدام خط‌ها در ناحیه باشند", options = ["هر دو خط", "فقط %K", "حداقل یکی"], group = gStoch, tooltip = "«هر دو خط» = هم %K و هم %D داخلِ ناحیه (سخت‌گیرترین). «فقط %K» = فقط خطِ آبی. «حداقل یکی» = آسان‌گیرترین.")
+stochInvert   = input.bool(false, "معکوس‌کردنِ قطبیت", group = gStoch, tooltip = "خاموش (پیش‌فرض، همان چیزی که خواستی): خرید فقط در اشباعِ خرید، فروش فقط در اشباعِ فروش — منطقِ ادامهٔ حرکت. روشن: خرید فقط در اشباعِ فروش و فروش فقط در اشباعِ خرید — منطقِ کلاسیکِ برگشتی. برای مقایسهٔ دو فرضیه روی همان بک‌تست.")
+
+float stochK = ta.sma(ta.stoch(close, high, low, stochPeriodK), stochSmoothK)
+float stochD = ta.sma(stochK, stochPeriodD)
+// مقدارِ کندلِ ماشه (کندلِ بستهٔ قبلی) — همان کندلی که الگوی اسکوب رویش تأیید می‌شود
+float stochK1 = stochK[1]
+float stochD1 = stochD[1]
+
+// گیتِ استوکاستیک برای یک جهت (۱ خرید / ۱- فروش) — خاموش ⇒ همیشه بله
+f_stochPass(int _dir) =>
+    bool _ok = true
+    if useStoch
+        float _k = stochK1
+        float _d = stochD1
+        if na(_k) or na(_d)
+            _ok := false
+        else
+            bool _obK = _k >= stochUpper
+            bool _obD = _d >= stochUpper
+            bool _osK = _k <= stochLower
+            bool _osD = _d <= stochLower
+            bool _ob = stochNeed == "فقط %K" ? _obK : stochNeed == "حداقل یکی" ? (_obK or _obD) : (_obK and _obD)
+            bool _os = stochNeed == "فقط %K" ? _osK : stochNeed == "حداقل یکی" ? (_osK or _osD) : (_osK and _osD)
+            bool _wantOB = _dir == 1 ? not stochInvert : stochInvert
+            _ok := _wantOB ? _ob : _os
+    _ok
+
+// ===================== نمایشِ مدل‌ها + مدل ۳ =====================
+gShow = "نمایشِ مدل‌ها و مدل ۳"
+showM1  = input.bool(true, "نمایشِ مدل ۱", group = gShow, tooltip = "برای دیدنِ مجزای یک مدل، بقیه را خاموش کن (مثلاً فقط مدل ۳).")
+showM2  = input.bool(true, "نمایشِ مدل ۲", group = gShow)
+showM3  = input.bool(true, "نمایشِ مدل ۳", group = gShow)
+useM3   = input.bool(true, "فعال‌سازیِ مدل ۳", group = gShow, tooltip = "مدل ۳ = عبورِ مجددِ قیمت از سطحِ یک مدل ۱/۲ + اسکوبِ اکستریم. شرطِ تایمِ بالا نمی‌خواهد؛ از اعتبارِ همان مدل ۱/۲ می‌آید.")
+m3Color = input.color(color.yellow, "رنگِ لیبلِ مدل ۳", group = gShow)
+showM3Line = input.bool(true, "نمایشِ خطِ سطحِ مدل ۳", group = gShow, tooltip = "سطحی که لیبلِ مدل ۱/۲ رویش افتاد (محلِّ کمینِ مدل ۳) را رسم می‌کند؛ بعد از باطل‌شدن خاکستری می‌شود.")
+
+// دفترِ عضویتِ توالی: هر کندلِ شماره‌خورده یک رکورد (بار، جهت، شماره) —
+// شامل شماره‌های گذشته‌نگر (کندلِ اوتسایدِ «۱» و کندلِ «۱»ِ تغییرِ جهت). یک بار می‌تواند دو عضویت (دو جهت) داشته باشد.
+var array<int> memBar = array.new<int>()
+var array<int> memDir = array.new<int>()
+var array<int> memCnt = array.new<int>()
+// دفترِ فریزِ خطِ نقدینگی: هر خطِ لمس‌شده یک رکورد (بارِ لمس‌کننده، جهتِ مالکِ خط)
+var array<int> frzBar = array.new<int>()
+var array<int> frzDir = array.new<int>()
+
+// بزرگ‌ترین شمارشِ ثبت‌شده برای (بار، جهت)؛ نبودِ عضویت = -1
+f_memCnt(int _b, int _d) =>
+    int _c = -1
+    int _n = array.size(memBar)
+    if _n > 0
+        for i = _n - 1 to 0
+            int _mb = array.get(memBar, i)
+            if _mb < _b
+                break
+            if _mb == _b and array.get(memDir, i) == _d
+                _c := math.max(_c, array.get(memCnt, i))
+    _c
+
+// آیا خطی که مالکش توالیِ جهتِ _d بود، روی یکی از این دو بار فریز شده است؟
+f_frozen(int _b1, int _b2, int _d) =>
+    bool _f = false
+    int _lo = math.min(_b1, _b2)
+    int _n = array.size(frzBar)
+    if _n > 0
+        for i = _n - 1 to 0
+            int _fb = array.get(frzBar, i)
+            if _fb < _lo
+                break
+            if (_fb == _b1 or _fb == _b2) and array.get(frzDir, i) == _d
+                _f := true
+                break
+    _f
+
+// ===================== متغیرهای پنل دیباگ =====================
+showDebug = input.bool(true, "پنل دیباگ", group = "Debug")
+var int    dbgBar   = na
+var string dbgKind  = "—"
+var int    dbgSwept = na
+var bool   dbgM1    = false
+var bool   dbgM2    = false
+var bool   dbgShown = false
+var int    dbgMs    = -1
+var int    dbgMo    = -1
+
+//=================================================================
+// =============   🧪 SIMULATOR — inputs & types   =================
+//=================================================================
+gS0 = "🧪 شبیه‌ساز — کلیات"
+sim_on     = input.bool(false, "فعال‌سازیِ شبیه‌ساز", group = gS0, tooltip = "روشن: روی سیگنال‌های مدلِ ۱/۲ معاملهٔ مجازی باز می‌شود و پنلِ گزارش پر می‌شود. خاموش: ابزار فقط همان نمایشِ قبلی را دارد. هیچ سفارشی به جایی ارسال نمی‌شود — همه‌چیز شبیه‌سازی روی همین چارت است.")
+sim_use_m1 = input.bool(true,  "ورود با مدلِ ۱", group = gS0, tooltip = "سیگنال‌های مدلِ ۱ (اسکوبِ هم‌جهت با خطِ توالی) وارد معامله شوند.")
+sim_use_m2 = input.bool(true,  "ورود با مدلِ ۲", group = gS0, tooltip = "سیگنال‌های مدلِ ۲ (اسکوبِ برگشتِ توالی) وارد معامله شوند.")
+sim_dirs   = input.string("هر دو", "جهتِ مجاز", options = ["هر دو", "فقط خرید", "فقط فروش"], group = gS0, tooltip = "فیلترِ جهتِ معامله‌ها — برای آزمایشِ فرضیه‌هایی مثلِ «فقط فروش در روندِ نزولی». همهٔ سیگنال‌ها روی‌هم گرفته می‌شوند (هم‌زمان مجاز).")
+
+gS1 = "🧪 سرمایه و ریسک"
+sim_init_bal = input.float(1000.0, "بالانسِ اولیه (دلار)", minval = 1, group = gS1, tooltip = "سرمایهٔ شروعِ شبیه‌سازی. مثالِ خودت: ۱۰۰۰ دلار.")
+sim_risk_pct = input.float(1.0, "ریسکِ هر معامله (٪ پایه)", minval = 0.01, step = 0.25, group = gS1, tooltip = "ریسکِ دلاریِ هر معامله = بالانسِ پایه × این درصد. این دلار «قفل» است و در طولِ یک حمله (تا روزِ سبز) ثابت می‌ماند — حتی اگر بالانس آب برود. مثال: ۱٪ از ۱۰۰۰ = ۱۰ دلار، ثابت.")
+sim_compound = input.bool(true, "کامپاند (رشدِ سایز با سود)", group = gS1, tooltip = "روشن: روزِ سبز که شد، پایه به بالانسِ تازه می‌پرد و ریسکِ دلاری بزرگ‌تر می‌شود (مثلاً هفتهٔ بعد ~۱۱ دلار). خاموش: ریسکِ دلاری همیشه = بالانسِ اولیه × درصد (سایزِ ثابت برای تستِ تمیز). در هر دو حالت سایز در طولِ یک حمله قفل است.")
+sim_cost     = input.float(0.0, "هزینهٔ هر معامله (واحدِ قیمت)", minval = 0, step = 0.05, group = gS1, tooltip = "اسپرد + کمیشن به واحدِ قیمتِ نماد (مثلاً طلا ~۰٫۳). سرِ ورود از بالانس کم می‌شود، پس هدفِ +۲٪ «خالص» است. ۰ = بدونِ هزینه.")
+sim_min_stop = input.float(0.0, "حداقل فاصلهٔ استاپ (واحدِ قیمت)", minval = 0, step = 0.05, group = gS1, tooltip = "سیگنال‌هایی که فاصلهٔ ورود تا استاپ‌شان از این کمتر است رد می‌شوند (استاپِ خیلی ریز را هزینه‌ها می‌خورند). ۰ = خاموش.")
+
+gS2 = "🧪 هدفِ روزانه و جبران"
+sim_tgt_pct  = input.float(2.0, "هدفِ روز (٪ پایه)", minval = 0.1, step = 0.5, group = gS2, tooltip = "هدفِ هر حمله = پایه × (۱ + این درصد). به این سطحِ مطلقِ دلاری که رسیدیم، روز سبز و تا فردا ورود نه. اگر روز نرسد، همان هدفِ مطلق و همان سایز به فردا کشیده می‌شود (جبرانِ سراسری).")
+sim_tgt_onclose = input.bool(false, "چکِ هدف روی کلوز (محافظه‌کار)", group = gS2, tooltip = "خاموش (مثلِ دستی): لحظه‌ای که اکوییتیِ شناور داخلِ کندل به هدف بزند بسته می‌شود. روشن: فقط اگر در کلوزِ کندل اکوییتی ≥ هدف باشد — محافظه‌کارتر، مخصوصاً وقتی چند معاملهٔ هم‌زمان داری.")
+sim_cap_on   = input.bool(false, "سقفِ ضررِ روزانه", group = gS2, tooltip = "روشن: اگر ضررِ یک روزِ تقویمی به درصدِ زیر برسد، تا فردا ورودِ تازه ممنوع. پیش‌فرض خاموش = همان ایدهٔ خام.")
+sim_cap_pct  = input.float(3.0, "سقفِ ضررِ روز (٪)", minval = 0.5, step = 0.5, group = gS2, tooltip = "حداکثر افتِ بالانس نسبت به اولِ روزِ تقویمی که بعدش ورود متوقف می‌شود (فقط وقتی گزینهٔ بالا روشن است).")
+sim_day_tz   = input.string("UTC+0330", "تایم‌زونِ مرزِ روز (۰۰:۰۰)", group = gS2, tooltip = "مرزِ روزِ تقویمی و «هدفِ روز» بر این تایم‌زون حساب می‌شود. تهران: UTC+0330.")
+
+gS3 = "🧪 بازهٔ معاملاتی"
+sim_win_on   = input.bool(false, "فقط در بازهٔ مشخص ورود کن", group = gS3, tooltip = "روشن: معاملهٔ تازه فقط داخلِ این بازه باز می‌شود. معاملهٔ باز اما تا استاپ/هدف ادامه می‌یابد (سودش را می‌گیرد). خاموش: کلِ روز.")
+sim_win_sess = input.session("0800-1200", "ساعتِ بازه (شروع-پایان)", group = gS3, tooltip = "بازهٔ مجازِ ورود به وقتِ منطقهٔ زمانیِ زیر.")
+sim_win_tz   = input.string("UTC+0330", "منطقهٔ زمانیِ بازه", group = gS3, tooltip = "منطقهٔ زمانیِ ساعتِ بالا (تهران: UTC+0330).")
+
+gS5 = "🧪 بازهٔ بک‌تست (تاریخ)"
+sim_t_start = input.time(timestamp("01 May 2026 00:00 +0330"), "شروعِ بک‌تست", group = gS5, tooltip = "معامله و آمار فقط از این تاریخ به بعد. برای تطبیق با بک‌تستِ دستی، همان تاریخِ شروعِ ریپلی را بگذار.")
+sim_use_end = input.bool(false, "پایانِ دستی", group = gS5, tooltip = "خاموش: تا آخرین کندلِ چارت (همین الان). روشن: تا تاریخِ زیر.")
+sim_t_end   = input.time(timestamp("31 Dec 2026 23:59 +0330"), "پایانِ بک‌تست", group = gS5, tooltip = "فقط وقتی «پایانِ دستی» روشن باشد اثر دارد.")
+
+gS4 = "🧪 نمایش"
+sim_show_marks = input.bool(true, "نشانگرِ ورود/خروج", group = gS4, tooltip = "مثلثِ ورود (با لیبلِ M1/M2)، ✕ روی استاپ، ◆ وقتی با هدفِ روز بسته شد.")
+sim_show_lines = input.bool(true, "خطِ استاپ + رابطِ ورود→خروج", group = gS4, tooltip = "خطِ قرمزِ استاپ در طولِ عمرِ هر معامله، و خطِ ورود تا خروج (سبز=سود، قرمز=استاپ).")
+sim_show_flag  = input.bool(true, "پرچمِ روزِ سبز (+۲٪)", group = gS4, tooltip = "سرِ کندلی که روز به هدف رسید، یک پرچمِ سبز با شمارهٔ روز.")
+sim_show_bg    = input.bool(false, "پس‌زمینهٔ کندلِ روزِ سبز", group = gS4, tooltip = "کندلی که روز سبز شد، پس‌زمینه‌اش سبزِ کم‌رنگ شود. پیش‌فرض خاموش (کم‌شلوغ).")
+sim_show_rep   = input.bool(true, "پنلِ گزارش", group = gS4, tooltip = "جدولِ انگلیسیِ آمار: کل، تفکیکِ مدل/جهت، کیفیتِ حرکت، روزانه و سرمایه.")
+sim_rep_pos    = input.string("پایین-چپ", "مکانِ پنلِ گزارش", options = ["پایین-چپ", "پایین-وسط", "بالا-چپ"], group = gS4, tooltip = "گوشه‌ای از چارت که پنلِ گزارش در آن می‌نشیند (پنلِ دیباگ بالا-راست است).")
+
+// ---- تایپ‌های شبیه‌ساز ----
+type sim_trade
+    int   dir       // 1 خرید ، -1 فروش
+    int   model     // 1 یا 2
+    float entry
+    float stop
+    float rdist     // فاصلهٔ ورود تا استاپ
+    float dpp       // دلار به ازای هر واحدِ قیمت = risk / rdist
+    float risk      // ریسکِ دلاریِ قفل‌شده (اسنپ‌شاتِ لحظهٔ ورود)
+    int   ebar
+    line  slLn
+
+type sim_probe   // پروبِ آمارِ خام: سرنوشتِ هر سیگنال تا برخوردِ استاپ (مستقل از مدیریتِ سرمایه)
+    int   dir
+    int   model
+    float entry
+    float stop
+    float rdist
+    float mfe       // بیشینهٔ پیشرویِ سود برحسبِ آر
+
+// ---- سیگنال‌های همین کندل (هر کندل از نو ساخته می‌شود؛ بلوک‌های اسکوب پُرش می‌کنند) ----
+array<int>   simSigDir   = array.new<int>()
+array<float> simSigStop  = array.new<float>()
+array<int>   simSigModel = array.new<int>()
+
+//=================================================================
+// ==============   MODULE 1 : PerfectScob (verbatim)   ============
+//=================================================================
+//+------------------------------------------------------------------+
+//|                   inputs                                         |
+//+------------------------------------------------------------------+
+scob_atr_period = input.int(defval = 14, group = "General Properties", title = "ATR Period")
+
+use_scob2 = input.bool(defval = true, group = "Perfect Scob2 Filter", title = "Use SCOB2", inline = "1")
+scob2_color = input.color(defval = color.blue, group = "Perfect Scob2 Filter", title = "", inline = "1")
+scob2_atr_factor = input.float(defval = 0.4, group = "Perfect Scob2 Filter", title = "ATR Factor")
+scob2_close_level = input.float(defval = 0.7, group = "Perfect Scob2 Filter", title = "Close Level")
+use_scob2_body_to_Candle_size = input.bool(defval = true, group = "Perfect Scob2 Filter", title = "", inline = "4")
+scob2_body_to_Candle_size = input.float(defval = 0.6, group = "Perfect Scob2 Filter", title = "Body To Candle Size >", inline = "4")
+use_scob2_shadow_to_shadow = input.bool(defval = true, group = "Perfect Scob2 Filter", title = "", inline = "7")
+scob2_shadow_to_shadow = input.float(defval = 1, group = "Perfect Scob2 Filter", title = "+Shadow To -Shadow >", inline = "7")
+
+use_scob3 = input.bool(defval = true, group = "Perfect Scob3 Filter", title = "Use SCOB3", inline = "2")
+scob3_color = input.color(defval = color.orange, group = "Perfect Scob3 Filter", title = "", inline = "2")
+scob3_atr_factor = input.float(defval = 0.4, group = "Perfect Scob3 Filter", title = "ATR Factor")
+scob3_close_level = input.float(defval = 0.7, group = "Perfect Scob3 Filter", title = "Close Level")
+use_scob3_body_to_Candle_size = input.bool(defval = true, group = "Perfect Scob3 Filter", title = "", inline = "5")
+scob3_body_to_Candle_size = input.float(defval = 0.6, group = "Perfect Scob3 Filter", title = "Body To Candle Size >", inline = "5")
+use_scob3_shadow_to_shadow = input.bool(defval = true, group = "Perfect Scob3 Filter", title = "", inline = "8")
+scob3_shadow_to_shadow = input.float(defval = 1, group = "Perfect Scob3 Filter", title = "+Shadow To -Shadow >", inline = "8")
+use_scob3_3_to_2 = input.bool(defval = true, group = "Perfect Scob3 Filter", title = "", inline = "10")
+scob3_3_to_2 = input.float(defval = 1.5, group = "Perfect Scob3 Filter", title = "Third To Second Size <", inline = "10")
+
+use_medium_scob3 = input.bool(defval = true, group = "Perfect Medium Scob3 Filter", title = "Use Medium SCOB3", inline = "3")
+medium_scob3_color = input.color(defval = color.aqua, group = "Perfect Medium Scob3 Filter", title = "", inline = "3")
+medium_scob3_atr_factor = input.float(defval = 0.4, group = "Perfect Medium Scob3 Filter", title = "ATR Factor")
+medium_scob3_close_level = input.float(defval = 0.7, group = "Perfect Medium Scob3 Filter", title = "Close Level")
+use_medium_scob3_body_to_Candle_size = input.bool(defval = true, group = "Perfect Medium Scob3 Filter", title = "", inline = "6")
+medium_scob3_body_to_Candle_size = input.float(defval = 0.6, group = "Perfect Medium Scob3 Filter", title = "Body To Candle Size >", inline = "6")
+use_medium_scob3_shadow_to_shadow = input.bool(defval = true, group = "Perfect Medium Scob3 Filter", title = "", inline = "9")
+medium_scob3_shadow_to_shadow = input.float(defval = 1, group = "Perfect Medium Scob3 Filter", title = "+Shadow To -Shadow >", inline = "9")
+use_medium_scob3_3_to_2 = input.bool(defval = true, group = "Perfect Medium Scob3 Filter", title = "", inline = "11")
+medium_scob3_3_to_2 = input.float(defval = 1.5, group = "Perfect Medium Scob3 Filter", title = "Third To Second Size <", inline = "11")
+//+------------------------------------------------------------------+
+//|                   variables                                      |
+//+------------------------------------------------------------------+
+color minor_zigzag_color = showZigzag ? color.blue : color.new(color.blue, 100)
+
+var float abnormal_high_value = na 
+var float abnormal_low_value = na 
+
+var float abnormal_high_rsi = na 
+var float abnormal_low_rsi = na 
+
+var int abnormal_time = na 
+
+var string perv_structure = "low"
+
+var float perv_high_value = na
+var float perv_low_value = na
+
+var int perv_high_time = na
+var int perv_low_time = na
+
+var float perv_high_rsi = na 
+var float perv_low_rsi = na 
+
+var float second_perv_high_value = na
+var float second_perv_low_value = na
+
+var int second_perv_high_time = na
+var int second_perv_low_time = na
+
+var float second_perv_high_rsi = na
+var float second_perv_low_rsi = na
+
+var string high_low_status = "normal"
+var int last_bar = na 
+
+type control_candle_obj
+    float _open 
+    float _close
+    float _high
+    float _low
+    int _time
+ 
+var control_candle_obj third_control_candle = na 
+var control_candle_obj second_control_candle = na 
+var control_candle_obj perv_control_candle = na 
+
+var bool red_orderblock_done = false
+var bool green_orderblock_done = false
+
+var bool red_inside_orderblock_done = false
+var bool green_inside_orderblock_done = false
+
+var int current_bar_index = -1
+
+var int perv_ob_time = na 
+
+var control_candle_obj init_candle = na
+
+var line last_zigzag_line = na
+
+type pivot_obj
+    float _price
+    float _rsi
+    int _time
+
+var list_of_high_pivots = array.new<pivot_obj>()
+var list_of_low_pivots = array.new<pivot_obj>()
+
+var int last_rsi_line_time = 0
+
+float atr = ta.atr(scob_atr_period)
+
+bool red_scob2 = false
+bool green_scob2 = false
+
+bool red_scob3 = false
+bool green_scob3 = false
+
+float rsi_high = ta.rsi(high, 14)
+float rsi_low = ta.rsi(low, 14)
+//+------------------------------------------------------------------+
+//|                   initial function                               |
+//+------------------------------------------------------------------+
+if na(perv_low_value) and last_bar_index - bar_index < 2500
+
+    perv_low_value := low[1] 
+    perv_low_time := bar_index - 1
+    perv_low_rsi := rsi_low[1]
+
+    if current_bar_index != bar_index
+        current_bar_index := bar_index
+
+        third_control_candle := second_control_candle
+        second_control_candle := perv_control_candle
+        perv_control_candle := control_candle_obj.new(open[1], close[1], high[1], low[1], bar_index - 1)
+//+------------------------------------------------------------------+
+//|                   abnormal situation                             |
+//+------------------------------------------------------------------+
+//create abnormal
+if not na(perv_control_candle)
+    if high[1] > perv_control_candle._high and low[1] < perv_control_candle._low and high_low_status == "normal"
+        high_low_status := "abnormal"
+        
+        abnormal_high_value := high[1]
+        abnormal_low_value := low[1]
+        abnormal_time := bar_index - 1 
+        abnormal_high_rsi := rsi_high[1]
+        abnormal_low_rsi := rsi_low[1]
+
+        if current_bar_index != bar_index
+            current_bar_index := bar_index
+
+            third_control_candle := second_control_candle
+            second_control_candle := perv_control_candle
+            perv_control_candle := control_candle_obj.new(open[1], close[1], high[1], low[1], bar_index - 1)
+
+//update abnormal
+if high_low_status == "abnormal" and ((high[1] > abnormal_high_value and low[1] < abnormal_low_value) or (high[1] == abnormal_high_value and low[1] == abnormal_low_value))
+    
+    abnormal_high_value := high[1]
+    abnormal_low_value := low[1]
+    abnormal_time := bar_index - 1
+    abnormal_high_rsi := rsi_high[1]
+    abnormal_low_rsi := rsi_low[1]
+
+    if current_bar_index != bar_index
+        current_bar_index := bar_index
+
+        third_control_candle := second_control_candle
+        second_control_candle := perv_control_candle
+        perv_control_candle := control_candle_obj.new(open[1], close[1], high[1], low[1], bar_index - 1)
+//+------------------------------------------------------------------+
+//|                   make high                                      |
+//+------------------------------------------------------------------+
+//hunt floating low and make new high 
+if not na(perv_control_candle)
+    if perv_structure == "low" and low[1] < perv_control_candle._low and high_low_status == "normal"
+
+        float _high = na 
+        int _time = na 
+        float _rsi = na 
+        for i = bar_index - perv_low_time to 2
+            if na(_high) or high[i] >= _high
+                _high := high[i] 
+                _time := bar_index - i
+                _rsi := rsi_high[i]
+
+        second_perv_high_value := perv_high_value
+        second_perv_high_time := perv_high_time
+        second_perv_high_rsi := perv_high_rsi
+
+        perv_high_value := _high
+        perv_high_time := _time
+        perv_high_rsi := _rsi
+
+        list_of_high_pivots.push(pivot_obj.new(perv_high_value, perv_high_rsi, perv_high_time))
+        
+        last_zigzag_line := line.new(perv_low_time, perv_low_value, perv_high_time, perv_high_value, color = minor_zigzag_color, style = line.style_solid, width = 2)
+
+        perv_structure := "high"
+
+        if current_bar_index != bar_index
+            current_bar_index := bar_index
+
+            third_control_candle := second_control_candle
+            second_control_candle := perv_control_candle
+            perv_control_candle := control_candle_obj.new(open[1], close[1], high[1], low[1], bar_index - 1)
+//+------------------------------------------------------------------+
+//|                   make low                                       |
+//+------------------------------------------------------------------+
+//hunt floating high and make new low 
+if not na(perv_control_candle)
+    if perv_structure == "high" and high[1] > perv_control_candle._high and high_low_status == "normal"
+
+        float _low = na 
+        int _time = na 
+        float _rsi = na 
+        for i = bar_index - perv_high_time to 2
+            if na(_low) or low[i] <= _low
+                _low := low[i] 
+                _time := bar_index - i
+                _rsi := rsi_low[i]
+
+        second_perv_low_value := perv_low_value
+        second_perv_low_time := perv_low_time
+        second_perv_low_rsi := perv_low_rsi
+
+        perv_low_value := _low
+        perv_low_time := _time
+        perv_low_rsi := _rsi
+
+        list_of_low_pivots.push(pivot_obj.new(perv_low_value, perv_low_rsi, perv_low_time))
+        
+        last_zigzag_line := line.new(perv_high_time, perv_high_value, perv_low_time, perv_low_value, color = minor_zigzag_color, style = line.style_solid, width = 2) 
+
+        perv_structure := "low"
+
+        if current_bar_index != bar_index
+            current_bar_index := bar_index
+
+            third_control_candle := second_control_candle
+            second_control_candle := perv_control_candle
+            perv_control_candle := control_candle_obj.new(open[1], close[1], high[1], low[1], bar_index - 1)
+//+------------------------------------------------------------------+
+//|                   abnormal high low                              |
+//+------------------------------------------------------------------+
+//perv_structure == "high" 
+if high_low_status == "abnormal" and perv_structure == "high" and high[1] > abnormal_high_value and low[1] >= abnormal_low_value
+
+    float _low = na 
+    int _time = na 
+    float _rsi = na 
+    for i = bar_index - perv_high_time to bar_index - abnormal_time
+        if na(_low) or low[i] <= _low
+            _low := low[i] 
+            _time := bar_index - i
+            _rsi := rsi_low[i]
+
+    second_perv_low_value := perv_low_value
+    second_perv_low_time := perv_low_time
+    second_perv_low_rsi := perv_low_rsi
+
+    perv_low_value := _low
+    perv_low_time := _time
+    perv_low_rsi := _rsi
+
+    list_of_low_pivots.push(pivot_obj.new(perv_low_value, perv_low_rsi, perv_low_time))
+    
+    last_zigzag_line := line.new(perv_high_time, perv_high_value, perv_low_time, perv_low_value, color = minor_zigzag_color, style = line.style_solid, width = 2) 
+
+    perv_structure := "low"
+    high_low_status := "normal"
+
+    if current_bar_index != bar_index
+        current_bar_index := bar_index
+
+        third_control_candle := second_control_candle
+        second_control_candle := perv_control_candle
+        perv_control_candle := control_candle_obj.new(open[1], close[1], high[1], low[1], bar_index - 1)
+
+if high_low_status == "abnormal" and perv_structure == "high" and low[1] < abnormal_low_value and high[1] <= abnormal_high_value
+
+    float _low = na 
+    int _time = na 
+    float _rsi = na 
+    for i = bar_index - perv_high_time to bar_index - abnormal_time + 1
+        if na(_low) or low[i] <= _low
+            _low := low[i] 
+            _time := bar_index - i
+            _rsi := rsi_low[i]
+
+    second_perv_low_value := perv_low_value
+    second_perv_low_time := perv_low_time
+    second_perv_low_rsi := perv_low_rsi
+
+    perv_low_value := _low
+    perv_low_time := _time
+    perv_low_rsi := _rsi
+
+    list_of_low_pivots.push(pivot_obj.new(perv_low_value, perv_low_rsi, perv_low_time))
+    
+    last_zigzag_line := line.new(perv_high_time, perv_high_value, perv_low_time, perv_low_value, color = minor_zigzag_color, style = line.style_solid, width = 2) 
+
+    second_perv_high_value := perv_high_value
+    second_perv_high_time := perv_high_time
+    second_perv_high_rsi := perv_high_rsi
+
+    perv_high_value := abnormal_high_value
+    perv_high_time := abnormal_time
+    perv_high_rsi := abnormal_high_rsi
+
+    list_of_high_pivots.push(pivot_obj.new(perv_high_value, perv_high_rsi, perv_high_time))
+
+    last_zigzag_line := line.new(perv_low_time, perv_low_value, perv_high_time, perv_high_value, color = minor_zigzag_color, style = line.style_solid, width = 2)
+
+    perv_structure := "high"
+    high_low_status := "normal"
+
+    if current_bar_index != bar_index
+        current_bar_index := bar_index
+
+        third_control_candle := second_control_candle
+        second_control_candle := perv_control_candle
+        perv_control_candle := control_candle_obj.new(open[1], close[1], high[1], low[1], bar_index - 1)
+
+//perv_structure == "low" 
+if high_low_status == "abnormal" and perv_structure == "low" and low[1] < abnormal_low_value and high[1] <= abnormal_high_value
+
+    float _high = na 
+    int _time = na 
+    float _rsi = na 
+    for i = bar_index - perv_low_time to bar_index - abnormal_time
+        if na(_high) or high[i] >= _high
+            _high := high[i] 
+            _time := bar_index - i
+            _rsi := rsi_high[i]
+
+    second_perv_high_value := perv_high_value
+    second_perv_high_time := perv_high_time
+    second_perv_high_rsi := perv_high_rsi
+
+    perv_high_value := _high
+    perv_high_time := _time
+    perv_high_rsi := _rsi
+
+    list_of_high_pivots.push(pivot_obj.new(perv_high_value, perv_high_rsi, perv_high_time))
+    
+    last_zigzag_line := line.new(perv_low_time, perv_low_value, perv_high_time, perv_high_value, color = minor_zigzag_color, style = line.style_solid, width = 2) 
+
+    perv_structure := "high"
+    high_low_status := "normal"
+
+    if current_bar_index != bar_index
+        current_bar_index := bar_index
+
+        third_control_candle := second_control_candle
+        second_control_candle := perv_control_candle
+        perv_control_candle := control_candle_obj.new(open[1], close[1], high[1], low[1], bar_index - 1)
+
+if high_low_status == "abnormal" and perv_structure == "low" and high[1] > abnormal_high_value and low[1] >= abnormal_low_value
+
+    float _high = na 
+    int _time = na 
+    float _rsi = na 
+    for i = bar_index - perv_low_time to bar_index - abnormal_time + 1
+        if na(_high) or high[i] >= _high
+            _high := high[i] 
+            _time := bar_index - i
+            _rsi := rsi_high[i]
+
+    second_perv_high_value := perv_high_value
+    second_perv_high_time := perv_high_time
+    second_perv_high_rsi := perv_high_rsi
+
+    perv_high_value := _high
+    perv_high_time := _time
+    perv_high_rsi := _rsi
+
+    list_of_high_pivots.push(pivot_obj.new(perv_high_value, perv_high_rsi, perv_high_time))
+    
+    last_zigzag_line := line.new(perv_high_time, perv_high_value, perv_low_time, perv_low_value, color = minor_zigzag_color, style = line.style_solid, width = 2) 
+
+    second_perv_low_value := perv_low_value
+    second_perv_low_time := perv_low_time
+    second_perv_low_rsi := perv_low_rsi
+
+    perv_low_value := abnormal_low_value
+    perv_low_time := abnormal_time
+    perv_low_rsi := abnormal_low_rsi
+
+    list_of_low_pivots.push(pivot_obj.new(perv_low_value, perv_low_rsi, perv_low_time))
+
+    last_zigzag_line := line.new(perv_low_time, perv_low_value, perv_high_time, perv_high_value, color = minor_zigzag_color, style = line.style_solid, width = 2)
+
+    perv_structure := "low"
+    high_low_status := "normal"
+
+    if current_bar_index != bar_index
+        current_bar_index := bar_index
+
+        third_control_candle := second_control_candle
+        second_control_candle := perv_control_candle
+        perv_control_candle := control_candle_obj.new(open[1], close[1], high[1], low[1], bar_index - 1)
+//+------------------------------------------------------------------+
+//|                   update control candle                          |
+//+------------------------------------------------------------------+
+//update floating high 
+if not na(perv_control_candle)
+    if (high[1] == perv_control_candle._high and perv_structure == "low")
+
+        if current_bar_index != bar_index
+            current_bar_index := bar_index
+
+            third_control_candle := second_control_candle
+            second_control_candle := perv_control_candle
+            perv_control_candle := control_candle_obj.new(open[1], close[1], high[1], low[1], bar_index - 1)
+
+    if ( low[1] == perv_control_candle._low and perv_structure == "high")
+
+        if current_bar_index != bar_index
+            current_bar_index := bar_index
+
+            third_control_candle := second_control_candle
+            second_control_candle := perv_control_candle
+            perv_control_candle := control_candle_obj.new(open[1], close[1], high[1], low[1], bar_index - 1)
+
+    if (high[1] > perv_control_candle._high or low[1] < perv_control_candle._low)
+
+        if current_bar_index != bar_index
+            current_bar_index := bar_index
+
+            third_control_candle := second_control_candle
+            second_control_candle := perv_control_candle
+            perv_control_candle := control_candle_obj.new(open[1], close[1], high[1], low[1], bar_index - 1)
+//+------------------------------------------------------------------+
+//|                   Remove Old Pivots                              |
+//+------------------------------------------------------------------+
+//high 
+if array.size(list_of_high_pivots) > 10
+    array.remove(list_of_high_pivots, 0)
+
+//low 
+if array.size(list_of_low_pivots) > 10
+    array.remove(list_of_low_pivots, 0)
+//+------------------------------------------------------------------+
+//|                   Remove Pivots because of RSI                   |
+//+------------------------------------------------------------------+
+//high 
+if array.size(list_of_high_pivots) > 0
+    for i = array.size(list_of_high_pivots) - 1 to 0
+        if perv_high_value > array.get(list_of_high_pivots, i)._price and perv_high_rsi > array.get(list_of_high_pivots, i)._rsi
+            array.remove(list_of_high_pivots, i)
+//low 
+if array.size(list_of_low_pivots) > 0
+    for i = array.size(list_of_low_pivots) - 1 to 0
+        if perv_high_value < array.get(list_of_low_pivots, i)._price and perv_high_rsi < array.get(list_of_low_pivots, i)._rsi
+            array.remove(list_of_low_pivots, i)
+
+//+------------------------------------------------------------------+
+//|        HTF condition engine (توالیِ تایمِ بالا + سطح/عبور/اکستریم) |
+//|  همان منطقِ توالیِ اندیکاتور روی کندل‌های تایمِ بالا (اوتساید/حفظِ توالی پیش‌فرض) |
+//+------------------------------------------------------------------+
+var float htfH = na
+var float htfL = na
+var float htfC = na
+var float htfPH = na
+var float htfPL = na
+var bool  htfHasPrev = false
+var int   htfDir = 0
+var int   htfCnt = 0
+var bool  htfPaused = false
+var float htfRefHi = na
+var float htfRefLo = na
+var bool  htfOutPend = false
+// سطحِ تایمِ بالا — دو خانهٔ مستقل (۰=خرید/لوِ توالیِ صعودی | ۱=فروش/هایِ توالیِ نزولی)
+// حداقل‌توالی فقط لحظهٔ صدورِ سیگنال چک می‌شود → پایین‌آوردنش فقط سیگنال اضافه می‌کند (یکنواخت)
+var array<float> hLvl   = array.new<float>(2, na)
+var array<int>   hCnt   = array.new<int>(2, 0)
+var array<bool>  hCross = array.new<bool>(2, false)
+var array<float> hExt   = array.new<float>(2, na)
+var array<bool>  hCanc  = array.new<bool>(2, false)
+var array<line>  hLn    = array.new<line>(2, na)
+var int   htfLastRoll = na
+// --- وضعیتِ مدل ۳ (اندیس ۰ = خرید/جهت ۱ | اندیس ۱ = فروش/جهت ۱-) ---
+var array<float> m3Lvl      = array.new<float>(2, na)
+var array<bool>  m3Armed    = array.new<bool>(2, false)
+var array<bool>  m3SidePrev = array.new<bool>(2, false)
+var array<bool>  m3Cancel   = array.new<bool>(2, false)
+var array<float> m3Ext      = array.new<float>(2, na)
+var array<line>  m3Ln       = array.new<line>(2, na)
+
+bool htfRoll   = timeframe.change(htfTF)
+bool htfNewBar = htfRoll and (na(htfLastRoll) or htfLastRoll != bar_index)
+if htfNewBar
+    htfLastRoll := bar_index
+    if not na(htfH)
+        if htfHasPrev
+            int _dirBefore = htfDir
+            float _h  = htfH
+            float _l  = htfL
+            float _ph = htfPH
+            float _pl = htfPL
+            bool _isIn  = _h <= _ph and _l >= _pl
+            bool _isOut = _h >  _ph and _l <  _pl
+            bool _isUp  = _h >  _ph and _l >= _pl
+            if _isOut
+                htfOutPend := true
+                htfDir := 0
+                htfCnt := 0
+                htfPaused := false
+                htfRefHi := na
+                htfRefLo := na
+            else if _isIn
+                if not htfOutPend and not htfPaused
+                    htfPaused := true
+                    htfRefHi := _ph
+                    htfRefLo := _pl
+            else
+                int _nd = _isUp ? 1 : -1
+                if htfOutPend
+                    htfOutPend := false
+                    htfDir := _nd
+                    htfCnt := 2
+                else if htfPaused
+                    if _h > htfRefHi or _l < htfRefLo
+                        htfPaused := false
+                        htfRefHi := na
+                        htfRefLo := na
+                        if htfDir != 0 and _nd == htfDir
+                            htfCnt := htfCnt + 1
+                        else
+                            htfDir := _nd
+                            htfCnt := 1
+                else
+                    if htfDir == 0
+                        htfDir := _nd
+                        htfCnt := 1
+                    else if _nd == htfDir
+                        htfCnt := htfCnt + 1
+                    else
+                        htfDir := _nd
+                        htfCnt := 2
+            // به‌روزرسانیِ سطح فقط روی کندلِ جهت‌دار؛ مستقل از حداقل‌توالی (شمارش ذخیره می‌شود)
+            if not htfPaused and htfDir != 0
+                int _sl = htfDir == 1 ? 0 : 1
+                if htfDir != _dirBefore
+                    array.set(hCross, _sl, false)
+                    array.set(hExt, _sl, na)
+                    array.set(hCanc, _sl, false)
+                float _lv = htfDir == 1 ? _l : _h
+                array.set(hLvl, _sl, _lv)
+                array.set(hCnt, _sl, htfCnt)
+                if showHtfLine and last_bar_index - bar_index < 4000
+                    line _ol = array.get(hLn, _sl)
+                    if not na(_ol)
+                        line.delete(_ol)
+                    array.set(hLn, _sl, line.new(bar_index, _lv, bar_index + 1, _lv, extend = extend.right, color = (htfDir == 1 ? htfUpCol : htfDnCol), width = 2, style = line.style_dotted))
+            // باطل‌شدن: کندلِ تایمِ بالا اونطرفِ سطح بسته شد (هر دو خانه، هر نوع کندل)
+            if not na(array.get(hLvl, 0)) and not array.get(hCanc, 0) and htfC < array.get(hLvl, 0)
+                array.set(hCanc, 0, true)
+                if showHtfLine and not na(array.get(hLn, 0))
+                    line.set_color(array.get(hLn, 0), color.new(color.gray, 40))
+                    line.set_extend(array.get(hLn, 0), extend.none)
+                    line.set_x2(array.get(hLn, 0), bar_index)
+            if not na(array.get(hLvl, 1)) and not array.get(hCanc, 1) and htfC > array.get(hLvl, 1)
+                array.set(hCanc, 1, true)
+                if showHtfLine and not na(array.get(hLn, 1))
+                    line.set_color(array.get(hLn, 1), color.new(color.gray, 40))
+                    line.set_extend(array.get(hLn, 1), extend.none)
+                    line.set_x2(array.get(hLn, 1), bar_index)
+        // باطل‌شدنِ سطحِ مدل ۳ با بسته‌شدنِ کندلِ تایمِ بالا اونطرفِ سطح
+        if not na(array.get(m3Lvl, 0)) and not array.get(m3Cancel, 0) and htfC < array.get(m3Lvl, 0)
+            array.set(m3Cancel, 0, true)
+            if showM3Line and not na(array.get(m3Ln, 0))
+                line.set_color(array.get(m3Ln, 0), color.new(color.gray, 55))
+                line.set_extend(array.get(m3Ln, 0), extend.none)
+                line.set_x2(array.get(m3Ln, 0), bar_index)
+        if not na(array.get(m3Lvl, 1)) and not array.get(m3Cancel, 1) and htfC > array.get(m3Lvl, 1)
+            array.set(m3Cancel, 1, true)
+            if showM3Line and not na(array.get(m3Ln, 1))
+                line.set_color(array.get(m3Ln, 1), color.new(color.gray, 55))
+                line.set_extend(array.get(m3Ln, 1), extend.none)
+                line.set_x2(array.get(m3Ln, 1), bar_index)
+        htfPH := htfH
+        htfPL := htfL
+        htfHasPrev := true
+    htfH := high
+    htfL := low
+    htfC := close
+else
+    htfH := math.max(htfH, high)
+    htfL := math.min(htfL, low)
+    htfC := close
+
+// عبورِ یک‌دقیقه از سطحِ تایمِ بالا + اکستریم از لحظهٔ عبور (هر دو خانه، روی کندلِ تأییدشدهٔ قبل)
+for _hi = 0 to 1
+    float _hv = array.get(hLvl, _hi)
+    if not na(_hv) and not array.get(hCanc, _hi)
+        bool _bb = _hi == 0 ? (low[1] < _hv) : (high[1] > _hv)
+        if _bb and not array.get(hCross, _hi)
+            array.set(hCross, _hi, true)
+            array.set(hExt, _hi, _hi == 0 ? low[1] : high[1])
+        else if _bb and array.get(hCross, _hi)
+            array.set(hExt, _hi, _hi == 0 ? math.min(array.get(hExt, _hi), low[1]) : math.max(array.get(hExt, _hi), high[1]))
+
+// گیتِ تایمِ بالا: آیا اسکوبِ این جهت مجاز است؟ (خاموش → همیشه بله)
+f_htfPass(int _dir, float _ext) =>
+    bool _ok = true
+    if useHtf
+        int _i = _dir == 1 ? 0 : 1
+        bool _active = not na(array.get(hLvl, _i)) and array.get(hCross, _i) and not array.get(hCanc, _i) and array.get(hCnt, _i) >= htfMinSeq
+        bool _isExt  = _dir == 1 ? (_ext <= array.get(hExt, _i)) : (_ext >= array.get(hExt, _i))
+        _ok := _active and _isExt
+    _ok
+
+// مدل ۳ — ردیابیِ عبورِ مجددِ قیمت از سطحِ مدل‌ها (روی کندلِ تأییدشدهٔ قبل)
+for _i = 0 to 1
+    float _lv = array.get(m3Lvl, _i)
+    if not na(_lv) and not array.get(m3Cancel, _i)
+        bool _isBuy = _i == 0
+        bool _side  = _isBuy ? (low[1] < _lv) : (high[1] > _lv)
+        if _side and not array.get(m3SidePrev, _i)
+            array.set(m3Armed, _i, true)
+            array.set(m3Ext, _i, _isBuy ? low[1] : high[1])
+        else if _side and array.get(m3Armed, _i)
+            array.set(m3Ext, _i, _isBuy ? math.min(array.get(m3Ext, _i), low[1]) : math.max(array.get(m3Ext, _i), high[1]))
+        else if not _side
+            array.set(m3Armed, _i, false)
+        array.set(m3SidePrev, _i, _side)
+
+// صدورِ نهاییِ یک اسکوب: اولویتِ مدل ۳ > مدل ۲ > مدل ۱، با توگل‌های نمایش و واچِ مدل ۳
+f_emit(label _lb, int _dir, float _lvl, int _t, bool _m1, bool _m2) =>
+    int _i = _dir == 1 ? 0 : 1
+    // گیتِ استوکاستیک: قبل از هر چیز. رد شد ⇒ _mod = 0 ⇒ نه لیبل، نه ورودِ شبیه‌ساز،
+    // نه ثبتِ سطحِ مدل ۳ (سیگنالِ حذف‌شده نباید سطحِ تازه بسازد). وضعیتِ مدل ۳ دست‌نخورده می‌ماند.
+    bool _gst = f_stochPass(_dir)
+    bool _base = ((not useScobLiqFilter and not useScobRevFilter) or (useScobLiqFilter and _m1) or (useScobRevFilter and _m2)) and _gst
+    bool _m3 = false
+    if useM3 and _gst and not na(array.get(m3Lvl, _i)) and not array.get(m3Cancel, _i) and array.get(m3Armed, _i)
+        _m3 := _dir == 1 ? (_lvl <= array.get(m3Ext, _i)) : (_lvl >= array.get(m3Ext, _i))
+    int _mod = _m3 ? 3 : (_base and _m2 ? 2 : (_base and _m1 ? 1 : 0))
+    bool _show = _mod == 3 ? showM3 : (_mod == 2 ? showM2 : (_mod == 1 ? showM1 : false))
+    if sim_on and ((_mod == 3 and useM3) or (_mod == 2 and sim_use_m2) or (_mod == 1 and sim_use_m1))
+        array.push(simSigDir, _dir)
+        array.push(simSigStop, _lvl)
+        array.push(simSigModel, _mod)
+    if _mod == 3
+        array.set(m3Armed, _i, false)
+    else if _mod == 1 or _mod == 2
+        array.set(m3Lvl, _i, _lvl)
+        array.set(m3Armed, _i, false)
+        array.set(m3SidePrev, _i, false)
+        array.set(m3Cancel, _i, false)
+        array.set(m3Ext, _i, na)
+        if showM3Line and last_bar_index - bar_index < 4000
+            line _old = array.get(m3Ln, _i)
+            if not na(_old)
+                line.delete(_old)
+            array.set(m3Ln, _i, line.new(_t, _lvl, bar_index + 1, _lvl, extend = extend.right, color = m3Color, width = 1, style = line.style_dashed))
+    if not _show
+        label.delete(_lb)
+    else if _mod == 3
+        label.set_text(_lb, "مدل 3")
+        label.set_color(_lb, m3Color)
+    else if _mod == 2
+        label.set_text(_lb, "مدل 2")
+        label.set_color(_lb, m2Color)
+    else
+        label.set_text(_lb, "مدل 1")
+    _show
+
+//+------------------------------------------------------------------+
+//|                   perfect scob 2                                 |
+//+------------------------------------------------------------------+
+//high
+if not na(second_control_candle)
+    if perv_control_candle._high > second_control_candle._high and 
+         perv_control_candle._close < second_control_candle._low and 
+         perv_control_candle._high - perv_control_candle._low >= atr * scob2_atr_factor and
+         perv_control_candle._high - perv_control_candle._close >= scob2_close_level * (perv_control_candle._high - perv_control_candle._low) and
+         ((perv_control_candle._open - perv_control_candle._close >= scob2_body_to_Candle_size * (perv_control_candle._high - perv_control_candle._low) and use_scob2_body_to_Candle_size) or not use_scob2_body_to_Candle_size) and 
+         ((perv_control_candle._high - perv_control_candle._open >= scob2_shadow_to_shadow * (perv_control_candle._close - perv_control_candle._low) and use_scob2_shadow_to_shadow) or not use_scob2_shadow_to_shadow) and 
+         perv_control_candle._time == bar_index - 1 and use_scob2
+        lbS2h = label.new(perv_control_candle._time, perv_control_candle._high, color = scob2_color, style = label.style_label_down)
+        int swS2h = second_control_candle._time
+        int msS2h = f_memCnt(swS2h, -1)
+        int moS2h = f_memCnt(swS2h, 1)
+        m1S2h = msS2h >= seqThreshold or f_frozen(perv_control_candle._time, swS2h, -1)
+        m2S2h = moS2h >= m2MinCount or f_frozen(perv_control_candle._time, swS2h, 1)
+        bool _ghtfS2h = not useHtf or f_htfPass(-1, perv_control_candle._high)
+        m1S2h := m1S2h and _ghtfS2h
+        m2S2h := m2S2h and _ghtfS2h
+        dbgBar := bar_index
+        dbgKind := "SCOB2 ↓"
+        dbgSwept := swS2h
+        dbgMs := msS2h
+        dbgMo := moS2h
+        dbgM1 := m1S2h
+        dbgM2 := m2S2h
+        bool _shS2h = f_emit(lbS2h, -1, perv_control_candle._high, perv_control_candle._time, m1S2h, m2S2h)
+        dbgShown := _shS2h
+
+//low
+if not na(second_control_candle)
+    if perv_control_candle._low < second_control_candle._low and 
+         perv_control_candle._close > second_control_candle._high and 
+         perv_control_candle._high - perv_control_candle._low >= atr * scob2_atr_factor and
+         perv_control_candle._close - perv_control_candle._low >= scob2_close_level * (perv_control_candle._high - perv_control_candle._low) and 
+         ((perv_control_candle._close - perv_control_candle._open >= scob2_body_to_Candle_size * (perv_control_candle._high - perv_control_candle._low) and use_scob2_body_to_Candle_size) or not use_scob2_body_to_Candle_size) and 
+         ((perv_control_candle._open - perv_control_candle._low >= scob2_shadow_to_shadow * (perv_control_candle._high - perv_control_candle._close) and use_scob2_shadow_to_shadow) or not use_scob2_shadow_to_shadow) and 
+         perv_control_candle._time == bar_index - 1 and use_scob2
+        lbS2l = label.new(perv_control_candle._time, perv_control_candle._low, color = scob2_color, style = label.style_label_up)
+        int swS2l = second_control_candle._time
+        int msS2l = f_memCnt(swS2l, 1)
+        int moS2l = f_memCnt(swS2l, -1)
+        m1S2l = msS2l >= seqThreshold or f_frozen(perv_control_candle._time, swS2l, 1)
+        m2S2l = moS2l >= m2MinCount or f_frozen(perv_control_candle._time, swS2l, -1)
+        bool _ghtfS2l = not useHtf or f_htfPass(1, perv_control_candle._low)
+        m1S2l := m1S2l and _ghtfS2l
+        m2S2l := m2S2l and _ghtfS2l
+        dbgBar := bar_index
+        dbgKind := "SCOB2 ↑"
+        dbgSwept := swS2l
+        dbgMs := msS2l
+        dbgMo := moS2l
+        dbgM1 := m1S2l
+        dbgM2 := m2S2l
+        bool _shS2l = f_emit(lbS2l, 1, perv_control_candle._low, perv_control_candle._time, m1S2l, m2S2l)
+        dbgShown := _shS2l
+//+------------------------------------------------------------------+
+//|                   perfect scob 3                                 |
+//+------------------------------------------------------------------+
+//high
+if not na(third_control_candle)
+    if second_control_candle._high > third_control_candle._high and 
+         second_control_candle._close <= third_control_candle._high and 
+         second_control_candle._close > third_control_candle._low and 
+         perv_control_candle._close < third_control_candle._low and 
+         perv_control_candle._close < second_control_candle._low and 
+         perv_control_candle._high <= second_control_candle._high and 
+         perv_control_candle._high - perv_control_candle._low >= atr * scob3_atr_factor and
+         perv_control_candle._high - perv_control_candle._close >= scob3_close_level * (perv_control_candle._high - perv_control_candle._low) and 
+         ((perv_control_candle._open - perv_control_candle._close >= scob3_body_to_Candle_size * (perv_control_candle._high - perv_control_candle._low) and use_scob3_body_to_Candle_size) or not use_scob3_body_to_Candle_size) and 
+         ((perv_control_candle._high - perv_control_candle._open >= scob3_shadow_to_shadow * (perv_control_candle._close - perv_control_candle._low) and use_scob3_shadow_to_shadow) or not use_scob3_shadow_to_shadow) and 
+         ((perv_control_candle._high - perv_control_candle._low <= scob3_3_to_2 * (second_control_candle._high - second_control_candle._low) and use_scob3_3_to_2) or not use_scob3_3_to_2) and
+         perv_control_candle._time == bar_index - 1 and use_scob3
+        lbS3h = label.new(second_control_candle._time, second_control_candle._high, color = scob3_color, style = label.style_label_down)
+        int swS3h = third_control_candle._time
+        int msS3h = f_memCnt(swS3h, -1)
+        int moS3h = f_memCnt(swS3h, 1)
+        m1S3h = msS3h >= seqThreshold or f_frozen(perv_control_candle._time, second_control_candle._time, -1)
+        m2S3h = moS3h >= m2MinCount or f_frozen(perv_control_candle._time, second_control_candle._time, 1)
+        bool _ghtfS3h = not useHtf or f_htfPass(-1, second_control_candle._high)
+        m1S3h := m1S3h and _ghtfS3h
+        m2S3h := m2S3h and _ghtfS3h
+        dbgBar := bar_index
+        dbgKind := "SCOB3 ↓"
+        dbgSwept := swS3h
+        dbgMs := msS3h
+        dbgMo := moS3h
+        dbgM1 := m1S3h
+        dbgM2 := m2S3h
+        bool _shS3h = f_emit(lbS3h, -1, second_control_candle._high, second_control_candle._time, m1S3h, m2S3h)
+        dbgShown := _shS3h
+
+//low
+if not na(third_control_candle)
+    if second_control_candle._low < third_control_candle._low and 
+         second_control_candle._close >= third_control_candle._low and 
+         second_control_candle._close < third_control_candle._high and 
+         perv_control_candle._close > third_control_candle._high and 
+         perv_control_candle._close > second_control_candle._high and 
+         perv_control_candle._low >= second_control_candle._low and 
+         perv_control_candle._high - perv_control_candle._low >= atr * scob3_atr_factor and
+         perv_control_candle._close - perv_control_candle._low >= scob3_close_level * (perv_control_candle._high - perv_control_candle._low) and 
+         ((perv_control_candle._close - perv_control_candle._open >= scob3_body_to_Candle_size * (perv_control_candle._high - perv_control_candle._low) and  use_scob3_body_to_Candle_size) or not use_scob3_body_to_Candle_size) and 
+         ((perv_control_candle._open - perv_control_candle._low >= scob3_shadow_to_shadow * (perv_control_candle._high - perv_control_candle._close) and use_scob3_shadow_to_shadow) or not use_scob3_shadow_to_shadow) and 
+         ((perv_control_candle._high - perv_control_candle._low <= scob3_3_to_2 * (second_control_candle._high - second_control_candle._low) and use_scob3_3_to_2) or not use_scob3_3_to_2) and 
+         perv_control_candle._time == bar_index - 1 and use_scob3
+        lbS3l = label.new(second_control_candle._time, second_control_candle._low, color = scob3_color, style = label.style_label_up)
+        int swS3l = third_control_candle._time
+        int msS3l = f_memCnt(swS3l, 1)
+        int moS3l = f_memCnt(swS3l, -1)
+        m1S3l = msS3l >= seqThreshold or f_frozen(perv_control_candle._time, second_control_candle._time, 1)
+        m2S3l = moS3l >= m2MinCount or f_frozen(perv_control_candle._time, second_control_candle._time, -1)
+        bool _ghtfS3l = not useHtf or f_htfPass(1, second_control_candle._low)
+        m1S3l := m1S3l and _ghtfS3l
+        m2S3l := m2S3l and _ghtfS3l
+        dbgBar := bar_index
+        dbgKind := "SCOB3 ↑"
+        dbgSwept := swS3l
+        dbgMs := msS3l
+        dbgMo := moS3l
+        dbgM1 := m1S3l
+        dbgM2 := m2S3l
+        bool _shS3l = f_emit(lbS3l, 1, second_control_candle._low, second_control_candle._time, m1S3l, m2S3l)
+        dbgShown := _shS3l
+//+------------------------------------------------------------------+
+//|                   perfect medium scob 3                          |
+//+------------------------------------------------------------------+
+//high
+if not na(third_control_candle)
+    if second_control_candle._high > third_control_candle._high and 
+         second_control_candle._close <= third_control_candle._high and 
+         second_control_candle._close > third_control_candle._low and 
+         perv_control_candle._close > third_control_candle._low and 
+         perv_control_candle._close < second_control_candle._low and 
+         perv_control_candle._high <= second_control_candle._high and 
+         perv_control_candle._high - perv_control_candle._low >= atr * medium_scob3_atr_factor and
+         perv_control_candle._high - perv_control_candle._close >= medium_scob3_close_level * (perv_control_candle._high - perv_control_candle._low) and 
+         ((perv_control_candle._open - perv_control_candle._close >= medium_scob3_body_to_Candle_size * (perv_control_candle._high - perv_control_candle._low) and use_medium_scob3_body_to_Candle_size) or not use_medium_scob3_body_to_Candle_size) and 
+         ((perv_control_candle._high - perv_control_candle._open >= medium_scob3_shadow_to_shadow * (perv_control_candle._close - perv_control_candle._low) and use_medium_scob3_shadow_to_shadow) or not use_medium_scob3_shadow_to_shadow) and 
+         ((perv_control_candle._high - perv_control_candle._low <= medium_scob3_3_to_2 * (second_control_candle._high - second_control_candle._low) and use_medium_scob3_3_to_2) or not use_medium_scob3_3_to_2) and 
+         perv_control_candle._time == bar_index - 1 and use_medium_scob3
+        lbMh = label.new(second_control_candle._time, second_control_candle._high, color = medium_scob3_color, style = label.style_label_down)
+        int swMh = third_control_candle._time
+        int msMh = f_memCnt(swMh, -1)
+        int moMh = f_memCnt(swMh, 1)
+        m1Mh = msMh >= seqThreshold or f_frozen(perv_control_candle._time, second_control_candle._time, -1)
+        m2Mh = moMh >= m2MinCount or f_frozen(perv_control_candle._time, second_control_candle._time, 1)
+        bool _ghtfMh = not useHtf or f_htfPass(-1, second_control_candle._high)
+        m1Mh := m1Mh and _ghtfMh
+        m2Mh := m2Mh and _ghtfMh
+        dbgBar := bar_index
+        dbgKind := "Medium ↓"
+        dbgSwept := swMh
+        dbgMs := msMh
+        dbgMo := moMh
+        dbgM1 := m1Mh
+        dbgM2 := m2Mh
+        bool _shMh = f_emit(lbMh, -1, second_control_candle._high, second_control_candle._time, m1Mh, m2Mh)
+        dbgShown := _shMh
+
+//low
+if not na(third_control_candle)
+    if second_control_candle._low < third_control_candle._low and 
+         second_control_candle._close >= third_control_candle._low and 
+         second_control_candle._close < third_control_candle._high and 
+         perv_control_candle._close < third_control_candle._high and 
+         perv_control_candle._close > second_control_candle._high and 
+         perv_control_candle._low >= second_control_candle._low and 
+         perv_control_candle._high - perv_control_candle._low >= atr * medium_scob3_atr_factor and
+         perv_control_candle._close - perv_control_candle._low >= medium_scob3_close_level * (perv_control_candle._high - perv_control_candle._low) and 
+         ((perv_control_candle._close - perv_control_candle._open >= medium_scob3_body_to_Candle_size * (perv_control_candle._high - perv_control_candle._low) and  use_medium_scob3_body_to_Candle_size) or not use_medium_scob3_body_to_Candle_size) and 
+         ((perv_control_candle._open - perv_control_candle._low >= medium_scob3_shadow_to_shadow * (perv_control_candle._high - perv_control_candle._close) and use_medium_scob3_shadow_to_shadow) or not use_medium_scob3_shadow_to_shadow) and 
+         ((perv_control_candle._high - perv_control_candle._low <= medium_scob3_3_to_2 * (second_control_candle._high - second_control_candle._low) and use_medium_scob3_3_to_2) or not use_medium_scob3_3_to_2) and 
+         perv_control_candle._time == bar_index - 1 and use_medium_scob3
+        lbMl = label.new(second_control_candle._time, second_control_candle._low, color = medium_scob3_color, style = label.style_label_up)
+        int swMl = third_control_candle._time
+        int msMl = f_memCnt(swMl, 1)
+        int moMl = f_memCnt(swMl, -1)
+        m1Ml = msMl >= seqThreshold or f_frozen(perv_control_candle._time, second_control_candle._time, 1)
+        m2Ml = moMl >= m2MinCount or f_frozen(perv_control_candle._time, second_control_candle._time, -1)
+        bool _ghtfMl = not useHtf or f_htfPass(1, second_control_candle._low)
+        m1Ml := m1Ml and _ghtfMl
+        m2Ml := m2Ml and _ghtfMl
+        dbgBar := bar_index
+        dbgKind := "Medium ↑"
+        dbgSwept := swMl
+        dbgMs := msMl
+        dbgMo := moMl
+        dbgM1 := m1Ml
+        dbgM2 := m2Ml
+        bool _shMl = f_emit(lbMl, 1, second_control_candle._low, second_control_candle._time, m1Ml, m2Ml)
+        dbgShown := _shMl
+
+//=================================================================
+// ===========   MODULE 2 : Sequence Candle (v5 -> v6)   ===========
+//=================================================================
+// ===================== ورودی‌ها =====================
+showNum  = input.bool(true,  "نمایش شماره کندل‌ها")
+showLine = input.bool(true,  "نمایش خطوط نقدینگی")
+bullCol  = input.color(color.green, "رنگ صعودی")
+bearCol  = input.color(color.red,   "رنگ نزولی")
+useOutsideAsOne   = input.bool(true, "اوتساید به‌عنوان کندل ۱ (جهت با کندل بعدی)")
+preserveAcrossIns = input.bool(true, "حفظ توالی بعد از اینساید (اینساید شمارش نشود)")
+
+// ===================== متغیرهای وضعیت =====================
+var int   dir    = 0       // 1 صعودی، -1 نزولی، 0 خنثی
+var int   cnt    = 0       // شمارنده توالی
+var bool  paused = false   // توقف به‌خاطر اینساید بار
+var float refHi  = na      // سقف کندل ماقبل اینساید
+var float refLo  = na      // کف کندل ماقبل اینساید
+var bool  outPend = false  // اوتسایدِ منتظرِ تعیین جهت
+var int   outBar  = na     // ایندکس کندل اوتساید
+var float outHi   = na     // سقف اوتساید
+var float outLo   = na     // کف اوتساید
+
+// خط معلق
+var line  pendLine = na
+var float pendLvl  = na
+var int   pendMode = 0
+
+// ===================== تابع شماره‌گذاری (+ ثبتِ عضویت در دفتر) =====================
+f_num(int bi, int n, int d, float y) =>
+    array.push(memBar, bi)
+    array.push(memDir, d)
+    array.push(memCnt, n)
+    if array.size(memBar) > 800
+        array.shift(memBar)
+        array.shift(memDir)
+        array.shift(memCnt)
+    if showNum
+        col = d == 1 ? bullCol : bearCol
+        sty = d == 1 ? label.style_label_up : label.style_label_down
+        label.new(bi, y, str.tostring(n), style=sty, color=col, textcolor=color.white, size=size.tiny)
+
+// ===================== منطق اصلی (روی کندل تأییدشده) =====================
+if barstate.isconfirmed
+    h  = high
+    l  = low
+    ph = high[1]
+    pl = low[1]
+
+    // طبقه‌بندی کندل
+    isInside  = h <= ph and l >= pl
+    isOutside = h >  ph and l <  pl
+    isUp      = h >  ph and l >= pl
+    isDown    = h <= ph and l <  pl
+
+    // ----- 1) تعیین تکلیف خط معلقِ کندل قبل (فریز اکید یا حذف؛ کندلِ اینساید نادیده گرفته می‌شود) -----
+    // ردیابیِ سطح مستقل از نمایش است (pendMode فلگِ فعال‌بودن)؛ هر فریز در دفترِ فریز ثبت می‌شود.
+    if pendMode != 0 and not isInside
+        touched = pendMode == -1 ? (h > pendLvl) : (l < pendLvl)
+        if touched
+            array.push(frzBar, bar_index)
+            array.push(frzDir, pendMode)
+            if array.size(frzBar) > 800
+                array.shift(frzBar)
+                array.shift(frzDir)
+            if not na(pendLine)
+                line.set_x2(pendLine, bar_index)   // فریز دقیقاً روی کندل لمس‌کننده
+        else
+            if not na(pendLine)
+                line.delete(pendLine)              // لمس نشد → حذف
+        pendLine := na
+        pendLvl  := na
+        pendMode := 0
+
+    // ----- 2) شمارش توالی -----
+    if isOutside
+        if useOutsideAsOne
+            // اوتساید نامزدِ «۱»؛ جهت با اولین کندل جهت‌دارِ بعدی روشن می‌شود (یک کندل تأخیر)
+            outPend := true
+            outBar  := bar_index
+            outHi   := h
+            outLo   := l
+            dir     := 0
+            cnt     := 0
+            paused  := false
+            refHi   := na
+            refLo   := na
+        else
+            // رفتار قبلی: ریست کامل
+            outPend := false
+            dir     := 0
+            cnt     := 0
+            paused  := false
+            refHi   := na
+            refLo   := na
+    else if isInside
+        // اینساید بار → بدون شماره (اگر اوتسایدِ منتظر داشته باشیم، فقط رد می‌شود)
+        if not outPend and not paused
+            paused := true
+            refHi  := ph
+            refLo  := pl
+    else
+        // کندل جهت‌دار
+        newDir = isUp ? 1 : -1
+        if outPend
+            // کندلِ بعدی جهت را روشن می‌کند: اوتساید «۱»، این کندل «۲»
+            outPend := false
+            f_num(outBar,    1, newDir, newDir == 1 ? outLo : outHi)
+            f_num(bar_index, 2, newDir, newDir == 1 ? l     : h)
+            dir := newDir
+            cnt := 2
+        else if paused
+            // فقط با خروج اکید از محدوده کندل ماقبل اینساید
+            brokeOut = h > refHi or l < refLo
+            if brokeOut
+                paused := false
+                refHi  := na
+                refLo  := na
+                if preserveAcrossIns and dir != 0 and newDir == dir
+                    // حفظِ توالیِ قبل از اینساید و ادامه
+                    cnt := cnt + 1
+                    f_num(bar_index, cnt, dir, dir == 1 ? l : h)
+                else
+                    // توالی جدید از ۱
+                    dir := newDir
+                    cnt := 1
+                    f_num(bar_index, 1, newDir, newDir == 1 ? l : h)
+            // اگر خارج نشد، همچنان متوقف می‌ماند
+        else
+            if dir == 0
+                dir := newDir
+                cnt := 1
+                f_num(bar_index, 1, newDir, newDir == 1 ? l : h)
+            else if newDir == dir
+                cnt := cnt + 1
+                f_num(bar_index, cnt, dir, dir == 1 ? l : h)
+            else
+                // تغییر جهت: کندل قبل گذشته‌نگر «۱»، کندل فعلی «۲»
+                f_num(bar_index - 1, 1, newDir, newDir == 1 ? pl : ph)
+                f_num(bar_index,     2, newDir, newDir == 1 ? l  : h)
+                dir := newDir
+                cnt := 2
+
+    // ----- 3) ایجاد خط معلق برای کندل فعلی (ردیابی همیشه؛ رسمِ خط فقط با گزینهٔ نمایش) -----
+    if not paused and dir != 0 and cnt >= seqThreshold
+        lvl      = dir == -1 ? h : l
+        pendLvl  := lvl
+        pendMode := dir
+        pendLine := showLine ? line.new(bar_index, lvl, bar_index + 1, lvl, color=(dir == 1 ? bullCol : bearCol), width=1) : na
+
+// ===================== رسمِ پنل دیباگ =====================
+if showDebug and barstate.islast
+    var table dbgT = table.new(position.top_right, 2, 13, border_width = 1, frame_width = 1, frame_color = color.gray)
+    dirTxt = dir == 1 ? "صعودی ↑" : dir == -1 ? "نزولی ↓" : "خنثی"
+    scobNow = dbgBar == bar_index
+    table.cell(dbgT, 0, 0, "🔍 دیباگ", text_color = color.white, bgcolor = color.new(color.blue, 0))
+    table.cell(dbgT, 1, 0, str.tostring(bar_index), text_color = color.white, bgcolor = color.new(color.blue, 0))
+    table.cell(dbgT, 0, 1, "توالی")
+    table.cell(dbgT, 1, 1, dirTxt + "  (" + str.tostring(cnt) + ")")
+    table.cell(dbgT, 0, 2, "SCOB این بار؟")
+    table.cell(dbgT, 1, 2, scobNow ? "بله" : "خیر", bgcolor = scobNow ? color.new(color.green, 60) : color.new(color.red, 70))
+    table.cell(dbgT, 0, 3, "آخرین SCOB")
+    table.cell(dbgT, 1, 3, dbgKind)
+    table.cell(dbgT, 0, 4, "بارِ SCOB")
+    table.cell(dbgT, 1, 4, str.tostring(dbgBar))
+    table.cell(dbgT, 0, 5, "کندلِ سوییپ")
+    table.cell(dbgT, 1, 5, str.tostring(dbgSwept))
+    table.cell(dbgT, 0, 6, "مدل۱ (هم‌جهت)")
+    table.cell(dbgT, 1, 6, dbgM1 ? "بله ✓" : "نه", bgcolor = dbgM1 ? color.new(color.green, 60) : color.new(color.gray, 85))
+    table.cell(dbgT, 0, 7, "مدل۲ (برگشت)")
+    table.cell(dbgT, 1, 7, dbgM2 ? "بله ✓" : "نه", bgcolor = dbgM2 ? color.new(color.green, 60) : color.new(color.gray, 85))
+    table.cell(dbgT, 0, 8, "نتیجه")
+    table.cell(dbgT, 1, 8, dbgShown ? "نمایش" : "حذف")
+    table.cell(dbgT, 0, 9, "عضویتِ هم‌جهت (شمارش)")
+    table.cell(dbgT, 1, 9, dbgMs >= 0 ? str.tostring(dbgMs) : "—")
+    table.cell(dbgT, 0, 10, "عضویتِ مخالف (شمارش)")
+    table.cell(dbgT, 1, 10, dbgMo >= 0 ? str.tostring(dbgMo) : "—")
+    // --- استوکاستیک: مقدارِ کندلِ ماشه (bar_index-1) و وضعیتِ گیت در همین لحظه ---
+    bool _stBuy  = f_stochPass(1)
+    bool _stSell = f_stochPass(-1)
+    table.cell(dbgT, 0, 11, "استوک K / D")
+    table.cell(dbgT, 1, 11, na(stochK1) or na(stochD1) ? "—" : str.tostring(stochK1, "#.#") + " / " + str.tostring(stochD1, "#.#"))
+    table.cell(dbgT, 0, 12, "گیتِ استوک (خرید/فروش)")
+    table.cell(dbgT, 1, 12, not useStoch ? "خاموش" : (_stBuy ? "✓" : "✗") + " / " + (_stSell ? "✓" : "✗"), bgcolor = not useStoch ? color.new(color.gray, 85) : (_stBuy or _stSell) ? color.new(color.green, 60) : color.new(color.red, 70))
+
+//=================================================================
+// =============   🧪 SIMULATOR — engine & report   ================
+//=================================================================
+// محاسبه‌های سراسری (باید بی‌قید اجرا شوند)
+int  _dayId = year(time, sim_day_tz) * 10000 + month(time, sim_day_tz) * 100 + dayofmonth(time, sim_day_tz)
+bool sim_new_day = _dayId != _dayId[1]
+bool sim_inwin   = not sim_win_on or not na(time(timeframe.period, sim_win_sess, sim_win_tz))
+bool sim_inrange = time >= sim_t_start and (not sim_use_end or time <= sim_t_end)
+
+// ---- وضعیتِ شبیه‌ساز ----
+var array<sim_trade> sim_open  = array.new<sim_trade>()
+var array<sim_probe> prb_open  = array.new<sim_probe>()
+var array<label>     sim_marks = array.new<label>()
+var array<line>      sim_lines = array.new<line>()
+var float sim_bal       = na
+var float sim_peak      = na
+var float sim_maxdd     = 0.0
+var float anchorBal     = na      // پایهٔ سایز؛ فقط روی روزِ سبز پله می‌خورد
+var float lockedRisk    = na      // ریسکِ دلاریِ قفل‌شده در طولِ حمله
+var float targetEquity  = na      // سطحِ مطلقِ هدفِ حملهٔ جاری
+var float day_start_bal = na
+var bool  day_done      = false
+var bool  day_capped    = false
+var bool  day_active    = false
+var bool  day_had_green = false
+var int   day_losses    = 0
+var int   max_day_losses = 0
+var int   attempt_trades = 0      // تعدادِ معاملهٔ حملهٔ جاری (تا سبزشدن)
+var int   green_count   = 0       // شمارهٔ حمله‌های سبز (برای پرچم)
+// کارنامهٔ کل و تفکیک‌ها (نتیجه‌ها بعد از هزینه؛ جمعِ خام جدا)
+var int   st_cnt = 0
+var int   st_win = 0
+var float st_sumr_raw = 0.0
+var float st_sumr_net = 0.0
+var int   st_m1_cnt = 0
+var int   st_m1_win = 0
+var float st_m1_sumr = 0.0
+var int   st_m2_cnt = 0
+var int   st_m2_win = 0
+var float st_m2_sumr = 0.0
+var int   st_b_cnt = 0
+var int   st_b_win = 0
+var float st_b_sumr = 0.0
+var int   st_s_cnt = 0
+var int   st_s_win = 0
+var float st_s_sumr = 0.0
+// کارنامهٔ روزانه
+var int   st_days = 0
+var int   st_days_tgt = 0
+var int   st_days_cap = 0
+var int   st_days_inc = 0
+var int   st_tgt_trades_sum = 0
+var float st_day_best = na
+var float st_day_worst = na
+var int   st_max_conc = 0
+// آمارِ خام (پروب‌ها)
+var int   pb1_cnt = 0
+var int   pb1_h1 = 0
+var int   pb1_h2 = 0
+var int   pb1_h3 = 0
+var float pb1_mfe_sum = 0.0
+var int   pb2_cnt = 0
+var int   pb2_h1 = 0
+var int   pb2_h2 = 0
+var int   pb2_h3 = 0
+var float pb2_mfe_sum = 0.0
+var float pb_mfe_max = 0.0
+var array<float> pb_mfe_all = array.new<float>()
+
+// بستنِ یک معامله: نشانگرِ خروج (◆ هدف / ✕ استاپ) + رابطِ ورود→خروج + فریزِ خطِ استاپ
+f_simClose(sim_trade t, float px, bool banked, bool win) =>
+    if sim_show_marks and last_bar_index - bar_index < 4000
+        string _st = banked ? (t.dir == 1 ? label.style_label_down : label.style_label_up) : (t.dir == 1 ? label.style_label_up : label.style_label_down)
+        label _x = label.new(bar_index, px, banked ? "◆" : "✕", xloc = xloc.bar_index, style = _st, color = win ? color.new(color.green, 0) : color.new(color.red, 0), textcolor = color.white, size = size.tiny)
+        array.push(sim_marks, _x)
+        if array.size(sim_marks) > 200
+            label.delete(array.shift(sim_marks))
+    if sim_show_lines and last_bar_index - bar_index < 4000
+        line _cn = line.new(t.ebar, t.entry, bar_index, px, xloc = xloc.bar_index, color = color.new(win ? color.green : color.red, 35), width = 1)
+        array.push(sim_lines, _cn)
+        if array.size(sim_lines) > 200
+            line.delete(array.shift(sim_lines))
+    if not na(t.slLn)
+        line.set_x2(t.slLn, bar_index)
+
+bool sim_green_bar = false
+
+if sim_on and barstate.isconfirmed
+    // ---- 0) راه‌اندازی ----
+    if na(sim_bal)
+        sim_bal := sim_init_bal
+        sim_peak := sim_init_bal
+        anchorBal := sim_init_bal
+        lockedRisk := sim_init_bal * sim_risk_pct / 100
+        targetEquity := sim_init_bal * (1 + sim_tgt_pct / 100)
+        day_start_bal := sim_init_bal
+
+    // ---- 1) تعویضِ روزِ تقویمی: فاینالِ آمار + ریستِ فلگ‌ها (انکر/سایز فقط روی سبز عوض می‌شوند) ----
+    if sim_new_day
+        if day_active
+            st_days += 1
+            float _dpct = (sim_bal / day_start_bal - 1) * 100
+            st_day_best  := na(st_day_best)  or _dpct > st_day_best  ? _dpct : st_day_best
+            st_day_worst := na(st_day_worst) or _dpct < st_day_worst ? _dpct : st_day_worst
+            if day_had_green
+                st_days_tgt += 1
+            else if day_capped
+                st_days_cap += 1
+            else
+                st_days_inc += 1
+        day_start_bal := sim_bal
+        day_done   := false
+        day_capped := false
+        day_active := false
+        day_had_green := false
+        day_losses := 0
+
+    // ---- 2) ورودهای تازه (سرِ اپنِ همین کندل؛ سایزِ دلاری «قفل») ----
+    int _nsig = array.size(simSigDir)
+    if _nsig > 0
+        for j = 0 to _nsig - 1
+            int   _d  = array.get(simSigDir, j)
+            float _sp = array.get(simSigStop, j)
+            int   _md = array.get(simSigModel, j)
+            float _en = open
+            float _rd = math.abs(_en - _sp)
+            bool  _ok = _rd > 0 and (sim_min_stop <= 0 or _rd >= sim_min_stop)
+            // پروب: مستقل از بازهٔ ساعتی/وضعیتِ روز، ولی داخلِ بازهٔ تاریخ (آمارِ خامِ ستاپ)
+            if _ok and sim_inrange
+                array.push(prb_open, sim_probe.new(_d, _md, _en, _sp, _rd, 0.0))
+                if array.size(prb_open) > 300
+                    array.shift(prb_open)
+            // معاملهٔ واقعیِ شبیه‌ساز: مقیدِ بازه، تاریخ، جهت و وضعیتِ روز — همهٔ سیگنال‌ها روی‌هم
+            bool _dirOk = sim_dirs == "هر دو" or (sim_dirs == "فقط خرید" and _d == 1) or (sim_dirs == "فقط فروش" and _d == -1)
+            if _ok and _dirOk and sim_inrange and sim_inwin and not day_done and not day_capped and sim_bal > 0 and array.size(sim_open) < 100
+                float _dpp = lockedRisk / _rd    // دلار به ازای هر واحدِ قیمت (ریسکِ قفل‌شده)
+                line _sl = na
+                if sim_show_lines and last_bar_index - bar_index < 4000
+                    _sl := line.new(bar_index, _sp, bar_index + 1, _sp, xloc = xloc.bar_index, color = color.new(color.red, 20), style = line.style_dashed, width = 1)
+                    array.push(sim_lines, _sl)
+                    if array.size(sim_lines) > 200
+                        line.delete(array.shift(sim_lines))
+                array.push(sim_open, sim_trade.new(_d, _md, _en, _sp, _rd, _dpp, lockedRisk, bar_index, _sl))
+                day_active := true
+                attempt_trades += 1
+                if sim_show_marks and last_bar_index - bar_index < 4000
+                    label _em = label.new(bar_index, _en, (_d == 1 ? "▲M" : "▼M") + str.tostring(_md), xloc = xloc.bar_index, style = _d == 1 ? label.style_label_up : label.style_label_down, color = _d == 1 ? color.new(color.teal, 0) : color.new(color.maroon, 0), textcolor = color.white, size = size.tiny)
+                    array.push(sim_marks, _em)
+                    if array.size(sim_marks) > 200
+                        label.delete(array.shift(sim_marks))
+        st_max_conc := math.max(st_max_conc, array.size(sim_open))
+
+    // ---- 3) استاپ‌ها اول (بدبینانه؛ روی اکستریمِ خلافِ جهت) ----
+    if array.size(sim_open) > 0
+        for i = array.size(sim_open) - 1 to 0
+            sim_trade t = array.get(sim_open, i)
+            if (t.dir == 1 ? low <= t.stop : high >= t.stop)
+                float _costR = t.rdist > 0 ? sim_cost / t.rdist : 0.0
+                sim_bal -= t.risk + sim_cost * t.dpp
+                st_cnt += 1
+                st_sumr_raw += -1.0
+                st_sumr_net += -1.0 - _costR
+                day_losses += 1
+                max_day_losses := math.max(max_day_losses, day_losses)
+                if t.model == 1
+                    st_m1_cnt += 1
+                    st_m1_sumr += -1.0 - _costR
+                else
+                    st_m2_cnt += 1
+                    st_m2_sumr += -1.0 - _costR
+                if t.dir == 1
+                    st_b_cnt += 1
+                    st_b_sumr += -1.0 - _costR
+                else
+                    st_s_cnt += 1
+                    st_s_sumr += -1.0 - _costR
+                f_simClose(t, t.stop, false, false)
+                array.remove(sim_open, i)
+        sim_peak := math.max(sim_peak, sim_bal)
+        sim_maxdd := sim_peak > 0 ? math.max(sim_maxdd, (sim_peak - sim_bal) / sim_peak * 100) : sim_maxdd
+
+    // ---- سقفِ ضررِ روزانه (روزِ تقویمی) ----
+    if sim_cap_on and not day_done and sim_bal <= day_start_bal * (1 - sim_cap_pct / 100)
+        day_capped := true
+
+    // ---- 4) هدفِ روز روی اکوییتیِ شناورِ خالص؛ اگر رسید همهٔ بازها بسته و روز سبز ----
+    if array.size(sim_open) > 0
+        float _floatNet = sim_bal
+        for i = 0 to array.size(sim_open) - 1
+            sim_trade t = array.get(sim_open, i)
+            float _mk = sim_tgt_onclose ? close : (t.dir == 1 ? high : low)
+            _floatNet += (_mk - t.entry) * t.dir * t.dpp - sim_cost * t.dpp
+        if _floatNet >= targetEquity
+            for i = array.size(sim_open) - 1 to 0
+                sim_trade t = array.get(sim_open, i)
+                float _mk = sim_tgt_onclose ? close : (t.dir == 1 ? high : low)
+                float _pnl = (_mk - t.entry) * t.dir * t.dpp - sim_cost * t.dpp
+                float _costR = t.rdist > 0 ? sim_cost / t.rdist : 0.0
+                float _rawR = (_mk - t.entry) * t.dir * t.dpp / t.risk
+                bool  _w = _pnl > 0
+                sim_bal += _pnl
+                st_cnt += 1
+                st_win += _w ? 1 : 0
+                st_sumr_raw += _rawR
+                st_sumr_net += _rawR - _costR
+                if t.model == 1
+                    st_m1_cnt += 1
+                    st_m1_win += _w ? 1 : 0
+                    st_m1_sumr += _rawR - _costR
+                else
+                    st_m2_cnt += 1
+                    st_m2_win += _w ? 1 : 0
+                    st_m2_sumr += _rawR - _costR
+                if t.dir == 1
+                    st_b_cnt += 1
+                    st_b_win += _w ? 1 : 0
+                    st_b_sumr += _rawR - _costR
+                else
+                    st_s_cnt += 1
+                    st_s_win += _w ? 1 : 0
+                    st_s_sumr += _rawR - _costR
+                f_simClose(t, _mk, true, _w)
+                array.remove(sim_open, i)
+            green_count += 1
+            day_done := true
+            day_had_green := true
+            day_active := true
+            st_tgt_trades_sum += attempt_trades
+            attempt_trades := 0
+            sim_green_bar := true
+            anchorBal := sim_bal                                  // پله‌خوردنِ انکر روی سبز
+            targetEquity := anchorBal * (1 + sim_tgt_pct / 100)
+            if sim_compound
+                lockedRisk := anchorBal * sim_risk_pct / 100
+            if sim_show_flag and last_bar_index - bar_index < 4000
+                label _fl = label.new(bar_index, high, "+" + str.tostring(sim_tgt_pct, "#.#") + "% D" + str.tostring(green_count), xloc = xloc.bar_index, yloc = yloc.price, style = label.style_label_down, color = color.new(color.green, 0), textcolor = color.white, size = size.small)
+                array.push(sim_marks, _fl)
+                if array.size(sim_marks) > 200
+                    label.delete(array.shift(sim_marks))
+            sim_peak := math.max(sim_peak, sim_bal)
+
+    // ---- 5) امتدادِ خطِ استاپِ بازماندگان تا کندلِ جاری ----
+    if sim_show_lines and array.size(sim_open) > 0
+        for i = 0 to array.size(sim_open) - 1
+            sim_trade t = array.get(sim_open, i)
+            if not na(t.slLn)
+                line.set_x2(t.slLn, bar_index)
+
+    // ---- 6) پروب‌های آمارِ خام (تا برخوردِ استاپ؛ بدبینانه؛ مستقل از مدیریتِ سرمایه) ----
+    if array.size(prb_open) > 0
+        for i = array.size(prb_open) - 1 to 0
+            sim_probe p = array.get(prb_open, i)
+            bool _pSL = p.dir == 1 ? low <= p.stop : high >= p.stop
+            if _pSL
+                if p.model == 1
+                    pb1_cnt += 1
+                    pb1_h1 += p.mfe >= 1.0 ? 1 : 0
+                    pb1_h2 += p.mfe >= 2.0 ? 1 : 0
+                    pb1_h3 += p.mfe >= 3.0 ? 1 : 0
+                    pb1_mfe_sum += p.mfe
+                else
+                    pb2_cnt += 1
+                    pb2_h1 += p.mfe >= 1.0 ? 1 : 0
+                    pb2_h2 += p.mfe >= 2.0 ? 1 : 0
+                    pb2_h3 += p.mfe >= 3.0 ? 1 : 0
+                    pb2_mfe_sum += p.mfe
+                pb_mfe_max := math.max(pb_mfe_max, p.mfe)
+                array.push(pb_mfe_all, p.mfe)
+                if array.size(pb_mfe_all) > 2000
+                    array.shift(pb_mfe_all)
+                array.remove(prb_open, i)
+            else
+                float _fav = p.dir == 1 ? (high - p.entry) / p.rdist : (p.entry - low) / p.rdist
+                p.mfe := math.max(p.mfe, _fav)
+
+// پس‌زمینهٔ کندلِ روزِ سبز (اختیاری)
+bgcolor(sim_on and sim_show_bg and sim_green_bar ? color.new(color.green, 85) : na)
+
+// ---- Report panel: colors & helpers (global — Pine functions cannot be defined inside blocks) ----
+color SIM_C_HDR = color.new(#1e3a5f, 0)
+color SIM_C_BG  = color.new(color.black, 45)
+f_simRow(table _t, int _r, string _k, string _v) =>
+    table.cell(_t, 0, _r, _k, text_color = color.new(color.silver, 0), text_size = size.small, bgcolor = SIM_C_BG, text_halign = text.align_left)
+    table.cell(_t, 1, _r, _v, text_color = color.white, text_size = size.small, bgcolor = SIM_C_BG, text_halign = text.align_left)
+f_wr(int _w, int _n) =>
+    _n > 0 ? str.tostring(_w * 100.0 / _n, "#.#") + "%" : "-"
+f_brk(int _n, int _w, float _s) =>
+    _n > 0 ? str.tostring(_n) + " · " + f_wr(_w, _n) + " · " + str.tostring(_s, "#.##") + "R" : "-"
+
+// ---- Report panel (simple, English) ----
+if sim_on and sim_show_rep and barstate.islast
+    var table repT = table.new(sim_rep_pos == "پایین-وسط" ? position.bottom_center : sim_rep_pos == "بالا-چپ" ? position.top_left : position.bottom_left, 2, 17, frame_color = color.new(color.gray, 30), frame_width = 1, border_color = color.new(color.gray, 60), border_width = 1)
+    float pb_med = na
+    int _nm = array.size(pb_mfe_all)
+    if _nm > 0
+        array<float> _tmp = array.copy(pb_mfe_all)
+        array.sort(_tmp, order.ascending)
+        pb_med := array.get(_tmp, _nm / 2)
+    int pb_cnt = pb1_cnt + pb2_cnt
+    float pb_sum = pb1_mfe_sum + pb2_mfe_sum
+    string _sub = (sim_compound ? "compound" : "fixed $") + " · " + (sim_tgt_onclose ? "close-check" : "intrabar")
+    float _gapR = not na(targetEquity) and not na(lockedRisk) and lockedRisk > 0 ? (targetEquity - sim_bal) / lockedRisk : na
+    table.cell(repT, 0, 0, "SIM REPORT", text_color = color.white, text_size = size.small, bgcolor = SIM_C_HDR, text_halign = text.align_left)
+    table.cell(repT, 1, 0, _sub, text_color = color.white, text_size = size.small, bgcolor = SIM_C_HDR, text_halign = text.align_left)
+    f_simRow(repT, 1, "Range", str.format_time(sim_t_start, "dd MMM") + " -> " + (sim_use_end ? str.format_time(sim_t_end, "dd MMM") : "now"))
+    f_simRow(repT, 2, "Trades (open)", str.tostring(st_cnt) + " (" + str.tostring(array.size(sim_open)) + ")")
+    f_simRow(repT, 3, "Win rate", f_wr(st_win, st_cnt) + " (" + str.tostring(st_win) + "W / " + str.tostring(st_cnt - st_win) + "L)")
+    f_simRow(repT, 4, "Net R / Avg R", str.tostring(st_sumr_net, "#.##") + " / " + (st_cnt > 0 ? str.tostring(st_sumr_net / st_cnt, "#.##") : "-"))
+    f_simRow(repT, 5, "Model 1", f_brk(st_m1_cnt, st_m1_win, st_m1_sumr))
+    f_simRow(repT, 6, "Model 2", f_brk(st_m2_cnt, st_m2_win, st_m2_sumr))
+    f_simRow(repT, 7, "Long", f_brk(st_b_cnt, st_b_win, st_b_sumr))
+    f_simRow(repT, 8, "Short", f_brk(st_s_cnt, st_s_win, st_s_sumr))
+    f_simRow(repT, 9, "Hit 1R/2R/3R", f_wr(pb1_h1 + pb2_h1, pb_cnt) + " / " + f_wr(pb1_h2 + pb2_h2, pb_cnt) + " / " + f_wr(pb1_h3 + pb2_h3, pb_cnt))
+    f_simRow(repT, 10, "MFE avg/med/max", pb_cnt > 0 ? str.tostring(pb_sum / pb_cnt, "#.##") + " / " + (na(pb_med) ? "-" : str.tostring(pb_med, "#.##")) + " / " + str.tostring(pb_mfe_max, "#.##") + "R" : "-")
+    f_simRow(repT, 11, "Days hit/miss/cap", str.tostring(st_days) + "d: " + str.tostring(st_days_tgt) + " / " + str.tostring(st_days_inc) + " / " + str.tostring(st_days_cap))
+    f_simRow(repT, 12, "Best / Worst day", (na(st_day_best) ? "-" : str.tostring(st_day_best, "#.##") + "%") + " / " + (na(st_day_worst) ? "-" : str.tostring(st_day_worst, "#.##") + "%"))
+    f_simRow(repT, 13, "Balance / Max DD", (na(sim_bal) ? "-" : str.tostring(sim_bal, "#.##") + " (" + str.tostring((sim_bal / sim_init_bal - 1) * 100, "#.##") + "%)") + " / " + str.tostring(sim_maxdd, "#.##") + "%")
+    f_simRow(repT, 14, "Locked $ / Anchor", (na(lockedRisk) ? "-" : str.tostring(lockedRisk, "#.##")) + " / " + (na(anchorBal) ? "-" : str.tostring(anchorBal, "#.##")))
+    f_simRow(repT, 15, "Target gap (R)", na(_gapR) ? "-" : (_gapR <= 0 ? "reached" : str.tostring(_gapR, "#.#") + "R"))
+    f_simRow(repT, 16, "Today", day_done ? "TARGET HIT" : day_capped ? "CAPPED" : day_active ? "RUNNING (open " + str.tostring(array.size(sim_open)) + ")" : "NO TRADES")
